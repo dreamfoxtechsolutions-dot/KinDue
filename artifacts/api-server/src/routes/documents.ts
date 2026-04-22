@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, documentsTable, receiptsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getMemberRole } from "../lib/memberGuard";
+import { getMemberRole, canDeleteDocuments } from "../lib/memberGuard";
 
 const router = Router();
 
@@ -68,7 +68,7 @@ router.delete("/households/:householdId/documents/:documentId", requireAuth, asy
   const documentId = parseInt(req.params.documentId);
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!canDeleteDocuments(role)) return res.status(403).json({ error: "Only Primary Users and Trustees can delete documents" });
 
   await db.delete(documentsTable).where(and(eq(documentsTable.id, documentId), eq(documentsTable.householdId, householdId)));
   res.status(204).send();

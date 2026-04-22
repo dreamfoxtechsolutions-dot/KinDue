@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, notificationSettingsTable, pushTokensTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
@@ -99,13 +99,11 @@ router.post("/me/push-tokens", requireAuth, async (req, res) => {
 
 router.delete("/me/push-tokens/:token", requireAuth, async (req, res) => {
   const { token } = req.params;
-  await db.delete(pushTokensTable).where(eq(pushTokensTable.token, token));
+  const user = req.dbUser!;
+  await db.delete(pushTokensTable).where(
+    and(eq(pushTokensTable.token, token), eq(pushTokensTable.userId, user.id))
+  );
   res.status(204).send();
-});
-
-router.post("/me/re-authenticate", requireAuth, async (req, res) => {
-  const sensitiveToken = `sat_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  res.json({ token: sensitiveToken, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() });
 });
 
 export default router;

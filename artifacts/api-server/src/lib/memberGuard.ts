@@ -27,3 +27,15 @@ export function canViewAccounts(role: MemberRole | null): boolean {
 export function canManageMembers(role: MemberRole | null): boolean {
   return role === "primary_user" || role === "trustee";
 }
+
+export function canViewAudit(role: MemberRole | null): boolean {
+  return role === "primary_user" || role === "trustee";
+}
+
+export function canDeleteDocuments(role: MemberRole | null): boolean {
+  return role === "primary_user" || role === "trustee";
+}
+
+export function requiresReceiptForPayment(role: MemberRole | null): boolean {
+  return role === "caregiver" || role === "other";
+}

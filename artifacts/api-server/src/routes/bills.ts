@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, billsTable, receiptsTable, documentsTable } from "@workspace/db";
 import { and, eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getMemberRole, canApprove } from "../lib/memberGuard";
+import { getMemberRole, canApprove, requiresReceiptForPayment } from "../lib/memberGuard";
 import { logAudit } from "../lib/audit";
 
 const router = Router();
@@ -213,16 +213,11 @@ router.post("/households/:householdId/bills/:billId/pay", requireAuth, async (re
   });
   if (!bill) return res.status(404).json({ error: "Not found" });
 
-  if ((role === "caregiver" || role === "other") && bill.receiptRequired) {
-    const receipts = await db.query.receiptsTable.findMany({
-      where: eq(receiptsTable.billId, billId),
-    });
-    if (receipts.length === 0) {
-      return res.status(400).json({ error: "Receipt required before marking this bill as paid" });
-    }
-  }
-
   const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize } = req.body;
+
+  if (requiresReceiptForPayment(role) && !receiptStorageKey) {
+    return res.status(400).json({ error: "Caregivers and Other members must provide a receipt when recording payments" });
+  }
 
   if (receiptStorageKey) {
     await db.insert(receiptsTable).values({

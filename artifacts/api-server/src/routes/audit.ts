@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, auditLogTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getMemberRole } from "../lib/memberGuard";
+import { getMemberRole, canViewAudit } from "../lib/memberGuard";
 
 const router = Router();
 
@@ -10,7 +10,7 @@ router.get("/households/:householdId/audit", requireAuth, async (req, res) => {
   const householdId = parseInt(req.params.householdId);
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAudit(role)) return res.status(403).json({ error: "Audit log is restricted to Primary Users and Trustees" });
 
   const { limit: limitStr, offset: offsetStr } = req.query;
   const limit = Math.min(parseInt(limitStr as string) || 50, 100);
