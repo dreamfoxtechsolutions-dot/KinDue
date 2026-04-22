@@ -7,10 +7,13 @@ import { getMemberRole, canDeleteDocuments } from "../lib/memberGuard";
 const router = Router();
 
 router.get("/households/:householdId/documents", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const { billId } = req.query;
   const docs = await db.query.documentsTable.findMany({
@@ -24,12 +27,22 @@ router.get("/households/:householdId/documents", requireAuth, async (req, res) =
 });
 
 router.post("/households/:householdId/documents", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
-  const { fileName, mimeType, fileSize, storageKey, billId, type } = req.body;
+  const { fileName, mimeType, fileSize, storageKey, billId, type } = req.body as {
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    storageKey: string;
+    billId?: number;
+    type?: string;
+  };
 
   const [doc] = await db
     .insert(documentsTable)
@@ -40,7 +53,7 @@ router.post("/households/:householdId/documents", requireAuth, async (req, res) 
       mimeType,
       fileSize,
       storageKey,
-      type: type ?? "other",
+      type: (type ?? "other") as "other",
       uploadedByUserId: user.id,
     })
     .returning();
@@ -49,42 +62,58 @@ router.post("/households/:householdId/documents", requireAuth, async (req, res) 
 });
 
 router.get("/households/:householdId/documents/:documentId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const documentId = parseInt(req.params.documentId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const documentId = parseInt(String(req.params["documentId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const doc = await db.query.documentsTable.findFirst({
     where: and(eq(documentsTable.id, documentId), eq(documentsTable.householdId, householdId)),
   });
 
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
   res.json(doc);
 });
 
 router.delete("/households/:householdId/documents/:documentId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const documentId = parseInt(req.params.documentId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const documentId = parseInt(String(req.params["documentId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canDeleteDocuments(role)) return res.status(403).json({ error: "Only Primary Users and Trustees can delete documents" });
+  if (!canDeleteDocuments(role)) {
+    res.status(403).json({ error: "Only Primary Users and Trustees can delete documents" });
+    return;
+  }
 
   await db.delete(documentsTable).where(and(eq(documentsTable.id, documentId), eq(documentsTable.householdId, householdId)));
   res.status(204).send();
 });
 
 router.get("/households/:householdId/bills/:billId/receipts", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const bill = await db.query.billsTable.findFirst({
     where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
   });
-  if (!bill) return res.status(404).json({ error: "Bill not found" });
+  if (!bill) {
+    res.status(404).json({ error: "Bill not found" });
+    return;
+  }
 
   const receipts = await db.query.receiptsTable.findMany({
     where: eq(receiptsTable.billId, billId),
@@ -95,18 +124,29 @@ router.get("/households/:householdId/bills/:billId/receipts", requireAuth, async
 });
 
 router.post("/households/:householdId/bills/:billId/receipts", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const bill = await db.query.billsTable.findFirst({
     where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
   });
-  if (!bill) return res.status(404).json({ error: "Bill not found" });
+  if (!bill) {
+    res.status(404).json({ error: "Bill not found" });
+    return;
+  }
 
-  const { fileName, mimeType, fileSize, storageKey } = req.body;
+  const { fileName, mimeType, fileSize, storageKey } = req.body as {
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+    storageKey: string;
+  };
 
   const [receipt] = await db
     .insert(receiptsTable)

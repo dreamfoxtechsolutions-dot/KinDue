@@ -8,10 +8,13 @@ import { logAudit } from "../lib/audit";
 const router = Router();
 
 router.get("/households/:householdId/gmail", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const connection = await db.query.gmailConnectionsTable.findFirst({
     where: eq(gmailConnectionsTable.householdId, householdId),
@@ -25,7 +28,7 @@ router.get("/households/:householdId/gmail", requireAuth, async (req, res) => {
   });
 
   if (!connection) {
-    return res.json({
+    res.json({
       id: 0,
       householdId,
       email: "",
@@ -34,6 +37,7 @@ router.get("/households/:householdId/gmail", requireAuth, async (req, res) => {
       candidatesFound: pendingCount.length,
       createdAt: new Date().toISOString(),
     });
+    return;
   }
 
   res.json({
@@ -48,12 +52,15 @@ router.get("/households/:householdId/gmail", requireAuth, async (req, res) => {
 });
 
 router.post("/households/:householdId/gmail/connect", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
-  const { code, redirectUri } = req.body;
+  const { code } = req.body as { code?: string; redirectUri?: string };
 
   const [connection] = await db
     .insert(gmailConnectionsTable)
@@ -80,10 +87,13 @@ router.post("/households/:householdId/gmail/connect", requireAuth, async (req, r
 });
 
 router.delete("/households/:householdId/gmail", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db
     .update(gmailConnectionsTable)
@@ -103,10 +113,13 @@ router.delete("/households/:householdId/gmail", requireAuth, async (req, res) =>
 });
 
 router.post("/households/:householdId/gmail/scan", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db
     .update(gmailConnectionsTable)
@@ -128,10 +141,13 @@ router.post("/households/:householdId/gmail/scan", requireAuth, async (req, res)
 });
 
 router.get("/households/:householdId/gmail/candidates", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const candidates = await db.query.gmailBillCandidatesTable.findMany({
     where: and(
@@ -148,29 +164,41 @@ router.get("/households/:householdId/gmail/candidates", requireAuth, async (req,
 });
 
 router.post("/households/:householdId/gmail/candidates/:candidateId/accept", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const candidateId = parseInt(req.params.candidateId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const candidateId = parseInt(String(req.params["candidateId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const candidate = await db.query.gmailBillCandidatesTable.findFirst({
     where: and(eq(gmailBillCandidatesTable.id, candidateId), eq(gmailBillCandidatesTable.householdId, householdId)),
   });
-  if (!candidate) return res.status(404).json({ error: "Not found" });
+  if (!candidate) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
-  const { name, category, amount, dueDate, recurrence, recurrenceInterval } = req.body;
+  const { name, category, amount, dueDate, recurrenceInterval } = req.body as {
+    name?: string;
+    category?: string;
+    amount?: number;
+    dueDate?: string;
+    recurrenceInterval?: string;
+  };
 
   const [bill] = await db
     .insert(billsTable)
     .values({
       householdId,
       name: name ?? candidate.extractedBillerName ?? candidate.emailSubject,
-      category: category ?? candidate.suggestedCategory ?? "other",
-      amount: (amount ?? candidate.extractedAmount ?? 0).toString(),
+      category: (category ?? candidate.suggestedCategory ?? "other") as "other",
+      amount: String(amount ?? candidate.extractedAmount ?? 0),
       currency: "USD",
       dueDate: dueDate ? new Date(dueDate) : candidate.extractedDueDate ?? new Date(),
-      recurrence: recurrenceInterval ?? "none",
+      recurrence: (recurrenceInterval ?? "none") as "none",
       status: "approved",
       createdByUserId: user.id,
     })
@@ -195,11 +223,14 @@ router.post("/households/:householdId/gmail/candidates/:candidateId/accept", req
 });
 
 router.delete("/households/:householdId/gmail/candidates/:candidateId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const candidateId = parseInt(req.params.candidateId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const candidateId = parseInt(String(req.params["candidateId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db
     .update(gmailBillCandidatesTable)

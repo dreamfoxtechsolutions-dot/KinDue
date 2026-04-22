@@ -49,7 +49,7 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState("");
 
-  const isLoading = fetchStatus === "loading";
+  const isLoading = fetchStatus === "fetching";
 
   const onGooglePress = useCallback(async () => {
     try {
@@ -106,9 +106,10 @@ export default function SignUpScreen() {
     }
   };
 
+  const signUpErrorList = signUpErrors as unknown as { message?: string }[] | undefined;
   const errorMsg =
     localError ||
-    (signUpErrors && signUpErrors.length > 0 && signUpErrors[0]?.message) ||
+    (signUpErrorList && signUpErrorList.length > 0 && signUpErrorList[0]?.message) ||
     "";
 
   const s = StyleSheet.create({

@@ -9,12 +9,14 @@ import gmailRouter from "./gmail";
 import plaidRouter from "./plaid";
 import auditRouter from "./audit";
 import storageRouter from "./storage";
+import shortcutsRouter from "./shortcuts";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(storageRouter);
 router.use(authRouter);
+router.use(shortcutsRouter);
 router.use(householdsRouter);
 router.use(billsRouter);
 router.use(documentsRouter);

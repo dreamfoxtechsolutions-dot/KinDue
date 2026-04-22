@@ -359,7 +359,7 @@ export default function BillDetailScreen() {
       >
         <View style={s.heroCard}>
           <Text style={s.billName}>{bill.name}</Text>
-          <Text style={s.billAmount}>{formatCurrency(bill.amount)}</Text>
+          <Text style={s.billAmount}>{formatCurrency(bill.amount ?? 0)}</Text>
           <View style={[s.statusBadge, { backgroundColor: sColor + "22" }]}>
             <Text style={[s.statusText, { color: sColor }]}>
               {statusLabels[bill.status] ?? bill.status}

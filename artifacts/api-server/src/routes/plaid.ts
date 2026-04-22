@@ -8,10 +8,13 @@ import { logAudit } from "../lib/audit";
 const router = Router();
 
 router.get("/households/:householdId/accounts", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied — financial data is restricted to primary users and trustees" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied — financial data is restricted to primary users and trustees" });
+    return;
+  }
 
   const accounts = await db.query.linkedAccountsTable.findMany({
     where: eq(linkedAccountsTable.householdId, householdId),
@@ -26,10 +29,13 @@ router.get("/households/:householdId/accounts", requireAuth, async (req, res) =>
 });
 
 router.post("/households/:householdId/accounts/plaid-link-token", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const expiration = new Date(Date.now() + 30 * 60 * 1000);
 
@@ -40,12 +46,19 @@ router.post("/households/:householdId/accounts/plaid-link-token", requireAuth, a
 });
 
 router.post("/households/:householdId/accounts/exchange", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
-  const { publicToken, institutionId, institutionName } = req.body;
+  const { publicToken, institutionId, institutionName } = req.body as {
+    publicToken: string;
+    institutionId: string;
+    institutionName: string;
+  };
 
   const [account] = await db
     .insert(linkedAccountsTable)
@@ -83,11 +96,14 @@ router.post("/households/:householdId/accounts/exchange", requireAuth, async (re
 });
 
 router.delete("/households/:householdId/accounts/:accountId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const accountId = parseInt(req.params.accountId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const accountId = parseInt(String(req.params["accountId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db.delete(linkedAccountsTable).where(and(eq(linkedAccountsTable.id, accountId), eq(linkedAccountsTable.householdId, householdId)));
 
@@ -105,11 +121,14 @@ router.delete("/households/:householdId/accounts/:accountId", requireAuth, async
 });
 
 router.post("/households/:householdId/accounts/:accountId/sync", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const accountId = parseInt(req.params.accountId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const accountId = parseInt(String(req.params["accountId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db
     .update(linkedAccountsTable)
@@ -124,16 +143,22 @@ router.post("/households/:householdId/accounts/:accountId/sync", requireAuth, as
 });
 
 router.get("/households/:householdId/accounts/:accountId/transactions", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const accountId = parseInt(req.params.accountId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const accountId = parseInt(String(req.params["accountId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canViewAccounts(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const account = await db.query.linkedAccountsTable.findFirst({
     where: and(eq(linkedAccountsTable.id, accountId), eq(linkedAccountsTable.householdId, householdId)),
   });
-  if (!account) return res.status(404).json({ error: "Account not found" });
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
 
   const transactions = await db.query.transactionsTable.findMany({
     where: eq(transactionsTable.linkedAccountId, accountId),

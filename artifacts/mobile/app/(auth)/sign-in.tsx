@@ -45,7 +45,7 @@ export default function SignInScreen() {
   const [localError, setLocalError] = useState("");
   const [mode, setMode] = useState<"options" | "email">("options");
 
-  const isLoading = fetchStatus === "loading";
+  const isLoading = fetchStatus === "fetching";
 
   const onGooglePress = useCallback(async () => {
     try {
@@ -85,11 +85,10 @@ export default function SignInScreen() {
     }
   };
 
+  const signInErrorList = signInErrors as unknown as { message?: string }[] | undefined;
   const errorMsg =
     localError ||
-    (signInErrors &&
-      signInErrors.length > 0 &&
-      signInErrors[0]?.message) ||
+    (signInErrorList && signInErrorList.length > 0 && signInErrorList[0]?.message) ||
     "";
 
   const styles = StyleSheet.create({

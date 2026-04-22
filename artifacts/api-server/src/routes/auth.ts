@@ -20,7 +20,7 @@ router.get("/me", requireAuth, async (req, res) => {
 
 router.patch("/me", requireAuth, async (req, res) => {
   const user = req.dbUser!;
-  const { displayName, avatarUrl } = req.body;
+  const { displayName, avatarUrl } = req.body as { displayName?: string; avatarUrl?: string };
 
   const [updated] = await db
     .update(usersTable)
@@ -54,7 +54,7 @@ router.get("/me/notification-settings", requireAuth, async (req, res) => {
 
 router.patch("/me/notification-settings", requireAuth, async (req, res) => {
   const user = req.dbUser!;
-  const updates = req.body;
+  const updates = req.body as Record<string, unknown>;
 
   const existing = await db.query.notificationSettingsTable.findFirst({
     where: eq(notificationSettingsTable.userId, user.id),
@@ -65,7 +65,8 @@ router.patch("/me/notification-settings", requireAuth, async (req, res) => {
       .insert(notificationSettingsTable)
       .values({ userId: user.id, ...updates })
       .returning();
-    return res.json(created);
+    res.json(created);
+    return;
   }
 
   const [updated] = await db
@@ -79,26 +80,30 @@ router.patch("/me/notification-settings", requireAuth, async (req, res) => {
 
 router.post("/me/push-tokens", requireAuth, async (req, res) => {
   const user = req.dbUser!;
-  const { token, platform } = req.body;
+  const { token, platform } = req.body as { token: string; platform: string };
+  const validPlatforms = ["ios", "android", "web"] as const;
+  type Platform = (typeof validPlatforms)[number];
+  const safePlatform = (validPlatforms.includes(platform as Platform) ? platform : "web") as Platform;
 
   const existing = await db.query.pushTokensTable.findFirst({
     where: eq(pushTokensTable.token, token),
   });
 
   if (existing) {
-    return res.status(201).json(existing);
+    res.status(201).json(existing);
+    return;
   }
 
   const [created] = await db
     .insert(pushTokensTable)
-    .values({ userId: user.id, token, platform })
+    .values({ userId: user.id, token, platform: safePlatform })
     .returning();
 
   res.status(201).json(created);
 });
 
 router.delete("/me/push-tokens/:token", requireAuth, async (req, res) => {
-  const { token } = req.params;
+  const token = String(req.params["token"]);
   const user = req.dbUser!;
   await db.delete(pushTokensTable).where(
     and(eq(pushTokensTable.token, token), eq(pushTokensTable.userId, user.id))

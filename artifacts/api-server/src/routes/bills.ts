@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, billsTable, receiptsTable, documentsTable } from "@workspace/db";
+import { db, billsTable, receiptsTable } from "@workspace/db";
 import { and, eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getMemberRole, canApprove, requiresReceiptForPayment } from "../lib/memberGuard";
@@ -8,15 +8,18 @@ import { logAudit } from "../lib/audit";
 const router = Router();
 
 router.get("/households/:householdId/bills", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const { status } = req.query;
   const bills = await db.query.billsTable.findMany({
     where: status
-      ? and(eq(billsTable.householdId, householdId), eq(billsTable.status, status as string))
+      ? and(eq(billsTable.householdId, householdId), eq(billsTable.status, status as "approved"))
       : eq(billsTable.householdId, householdId),
     orderBy: [desc(billsTable.dueDate)],
   });
@@ -25,12 +28,25 @@ router.get("/households/:householdId/bills", requireAuth, async (req, res) => {
 });
 
 router.post("/households/:householdId/bills", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
-  const { name, category, amount, currency, dueDate, payee, notes, recurrence, receiptRequired } = req.body;
+  const { name, category, amount, currency, dueDate, payee, notes, recurrence, receiptRequired } = req.body as {
+    name: string;
+    category?: string;
+    amount: number;
+    currency?: string;
+    dueDate: string;
+    payee?: string;
+    notes?: string;
+    recurrence?: string;
+    receiptRequired?: boolean;
+  };
 
   const status = canApprove(role) ? "approved" : "pending_approval";
 
@@ -39,13 +55,13 @@ router.post("/households/:householdId/bills", requireAuth, async (req, res) => {
     .values({
       householdId,
       name,
-      category: category ?? "other",
+      category: (category ?? "other") as "other",
       amount: amount.toString(),
       currency: currency ?? "USD",
       dueDate: new Date(dueDate),
       payee,
       notes,
-      recurrence: recurrence ?? "none",
+      recurrence: (recurrence ?? "none") as "none",
       status,
       receiptRequired: receiptRequired ?? false,
       createdByUserId: user.id,
@@ -59,53 +75,75 @@ router.post("/households/:householdId/bills", requireAuth, async (req, res) => {
     action: "bill.created",
     entityType: "bill",
     entityId: bill.id,
-    details: `Created bill "${name}" for $${amount}`,
+    details: `Created bill "${name}" for $${String(amount)}`,
   });
 
   res.status(201).json({ ...bill, amount: parseFloat(bill.amount) });
 });
 
 router.get("/households/:householdId/bills/:billId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const bill = await db.query.billsTable.findFirst({
     where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
   });
 
-  if (!bill) return res.status(404).json({ error: "Not found" });
+  if (!bill) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   res.json({ ...bill, amount: parseFloat(bill.amount) });
 });
 
 router.patch("/households/:householdId/bills/:billId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const bill = await db.query.billsTable.findFirst({
     where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
   });
-  if (!bill) return res.status(404).json({ error: "Not found" });
+  if (!bill) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
-  const { name, category, amount, currency, dueDate, payee, notes, recurrence, receiptRequired } = req.body;
+  const { name, category, amount, currency, dueDate, payee, notes, recurrence, receiptRequired } = req.body as {
+    name?: string;
+    category?: string;
+    amount?: number;
+    currency?: string;
+    dueDate?: string;
+    payee?: string;
+    notes?: string;
+    recurrence?: string;
+    receiptRequired?: boolean;
+  };
 
   const [updated] = await db
     .update(billsTable)
     .set({
       name: name ?? bill.name,
-      category: category ?? bill.category,
+      category: (category ?? bill.category) as typeof bill.category,
       amount: amount != null ? amount.toString() : bill.amount,
       currency: currency ?? bill.currency,
       dueDate: dueDate ? new Date(dueDate) : bill.dueDate,
       payee: payee ?? bill.payee,
       notes: notes ?? bill.notes,
-      recurrence: recurrence ?? bill.recurrence,
+      recurrence: (recurrence ?? bill.recurrence) as typeof bill.recurrence,
       receiptRequired: receiptRequired ?? bill.receiptRequired,
       updatedAt: new Date(),
     })
@@ -126,11 +164,14 @@ router.patch("/households/:householdId/bills/:billId", requireAuth, async (req, 
 });
 
 router.delete("/households/:householdId/bills/:billId", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   await db.delete(billsTable).where(and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)));
 
@@ -148,11 +189,14 @@ router.delete("/households/:householdId/bills/:billId", requireAuth, async (req,
 });
 
 router.post("/households/:householdId/bills/:billId/approve", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Only primary_user or trustee can approve bills" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Only primary_user or trustee can approve bills" });
+    return;
+  }
 
   const [updated] = await db
     .update(billsTable)
@@ -174,13 +218,16 @@ router.post("/households/:householdId/bills/:billId/approve", requireAuth, async
 });
 
 router.post("/households/:householdId/bills/:billId/reject", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canApprove(role)) return res.status(403).json({ error: "Only primary_user or trustee can reject bills" });
+  if (!canApprove(role)) {
+    res.status(403).json({ error: "Only primary_user or trustee can reject bills" });
+    return;
+  }
 
-  const { reason } = req.body;
+  const { reason } = req.body as { reason?: string };
 
   const [updated] = await db
     .update(billsTable)
@@ -202,21 +249,33 @@ router.post("/households/:householdId/bills/:billId/reject", requireAuth, async 
 });
 
 router.post("/households/:householdId/bills/:billId/pay", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
-  const billId = parseInt(req.params.billId);
+  const householdId = parseInt(String(req.params["householdId"]));
+  const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const bill = await db.query.billsTable.findFirst({
     where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
   });
-  if (!bill) return res.status(404).json({ error: "Not found" });
+  if (!bill) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
-  const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize } = req.body;
+  const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize } = req.body as {
+    receiptStorageKey?: string;
+    receiptFileName?: string;
+    receiptMimeType?: string;
+    receiptFileSize?: number;
+  };
 
   if (requiresReceiptForPayment(role) && !receiptStorageKey) {
-    return res.status(400).json({ error: "Caregivers and Other members must provide a receipt when recording payments" });
+    res.status(400).json({ error: "Caregivers and Other members must provide a receipt when recording payments" });
+    return;
   }
 
   if (receiptStorageKey) {

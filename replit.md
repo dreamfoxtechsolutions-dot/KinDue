@@ -90,12 +90,44 @@ Located in `artifacts/mobile/`. Expo SDK 54, React Native.
 ### Mobile State
 - `context/householdStore.tsx` — persists selected household ID via AsyncStorage
 
+## API Route Architecture
+
+The API has two layers of routes:
+- **Household-scoped routes** (original): `GET /api/households/:id/bills`, `GET /api/households/:id/triage`, etc.
+- **Shortcut routes** (`artifacts/api-server/src/routes/shortcuts.ts`): convenience routes the frontend uses directly, which look up the user's primary household automatically:
+  - `GET /api/bills`, `POST /api/bills` — user's household bills
+  - `GET /api/bills/:id`, `POST /api/bills/:id/approve`, `POST /api/bills/:id/reject`
+  - `GET /api/bills/:id/payments`, `POST /api/bills/:id/payments`
+  - `GET /api/households/mine`, `GET /api/households/mine/members`
+  - `POST /api/households/mine/members/invite`
+  - `GET /api/triage`, `POST /api/triage/run`
+  - `GET /api/audit`, `GET /api/documents`
+- Shortcut routes also normalize bill field names between frontend (`title`, `due_date`, `frequency`) and DB (`name`, `dueDate`, `recurrence`)
+
 ## Important Notes
 
 - Clerk frontend: use `@clerk/react` (NOT `@clerk/clerk-react`) for imports
 - Vite `fs.strict` set to `false` to allow pnpm symlinked packages
 - API routes all require Bearer token from Clerk via `requireAuth` middleware
-- `requireAuth` auto-creates DB users on first login via Clerk user API
+- `requireAuth` uses `onConflictDoUpdate` to handle race conditions when new users make simultaneous requests (prevents duplicate key errors)
 - `logAudit()` utility used throughout routes for full audit trail
+- Shortcut routes registered BEFORE household-scoped routes so `/api/households/mine` is matched before `/api/households/:householdId`
+- All route handlers use `res.json(...); return;` pattern (not `return res.json(...)`) to satisfy `noImplicitReturns: true` TypeScript setting
+- All `req.params` values cast with `String(req.params["key"])` to satisfy TypeScript strict typing
+- `lib/object-storage-web/tsconfig.json` has `composite: true` to enable project references from `artifacts/web`
+
+## E2E Testing
+
+Playwright tests live in `artifacts/web/e2e/` and run with:
+```
+cd artifacts/web && PLAYWRIGHT_BROWSERS_PATH=/home/runner/.cache/ms-playwright E2E_PORT=22333 E2E_API_PORT=8080 pnpm test:e2e
+```
+
+- `playwright.config.ts` — Playwright config (Chromium, port from `E2E_PORT` env, global setup)
+- `e2e/global.setup.ts` — Creates/finds a test user in Clerk via Admin API
+- `e2e/helpers/auth.ts` — `signInAsTestUser(page)` helper using `@clerk/testing`
+- `e2e/*.spec.ts` — Spec files for Dashboard, Bills, Triage, Audit Log, Household
+- Tests require `CLERK_SECRET_KEY` (for global setup) and Chromium system libraries
+- API tests target port 8080 (Express server), NOT 22333 (Vite frontend)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

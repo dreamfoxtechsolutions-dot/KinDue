@@ -37,19 +37,18 @@ function NavLink({ item, collapsed }: { item: typeof navItems[0]; collapsed: boo
   const Icon = item.icon;
 
   return (
-    <Link href={item.href}>
-      <a
-        className={cn(
-          "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
-          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-primary font-semibold"
-            : "text-sidebar-foreground/80"
-        )}
-      >
-        <Icon size={18} className="shrink-0" />
-        {!collapsed && <span>{item.label}</span>}
-      </a>
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        isActive
+          ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+          : "text-sidebar-foreground/80"
+      )}
+    >
+      <Icon size={18} className="shrink-0" />
+      {!collapsed && <span>{item.label}</span>}
     </Link>
   );
 }

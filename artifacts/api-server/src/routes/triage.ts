@@ -7,10 +7,13 @@ import { getMemberRole } from "../lib/memberGuard";
 const router = Router();
 
 router.get("/households/:householdId/triage", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!role) return res.status(403).json({ error: "Access denied" });
+  if (!role) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
 
   const now = new Date();
   const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);

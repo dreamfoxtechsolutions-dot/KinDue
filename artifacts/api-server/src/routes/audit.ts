@@ -7,10 +7,13 @@ import { getMemberRole, canViewAudit } from "../lib/memberGuard";
 const router = Router();
 
 router.get("/households/:householdId/audit", requireAuth, async (req, res) => {
-  const householdId = parseInt(req.params.householdId);
+  const householdId = parseInt(String(req.params["householdId"]));
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canViewAudit(role)) return res.status(403).json({ error: "Audit log is restricted to Primary Users and Trustees" });
+  if (!canViewAudit(role)) {
+    res.status(403).json({ error: "Audit log is restricted to Primary Users and Trustees" });
+    return;
+  }
 
   const { limit: limitStr, offset: offsetStr } = req.query;
   const limit = Math.min(parseInt(limitStr as string) || 50, 100);

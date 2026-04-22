@@ -30,14 +30,21 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       const displayName = `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || null;
       const avatarUrl = clerkUser.imageUrl || null;
 
-      const [newUser] = await db
+      const [upserted] = await db
         .insert(usersTable)
         .values({ clerkUserId: userId, email, displayName, avatarUrl })
+        .onConflictDoUpdate({
+          target: usersTable.clerkUserId,
+          set: { displayName, avatarUrl, updatedAt: new Date() },
+        })
         .returning();
 
-      await db.insert(notificationSettingsTable).values({ userId: newUser.id });
+      try {
+        await db.insert(notificationSettingsTable).values({ userId: upserted.id });
+      } catch {
+      }
 
-      user = newUser;
+      user = upserted;
     }
 
     req.dbUser = user;
