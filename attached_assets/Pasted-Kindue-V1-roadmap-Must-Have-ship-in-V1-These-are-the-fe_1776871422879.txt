@@ -1,0 +1,218 @@
+Kindue V1 roadmap
+
+Must Have — ship in V1
+
+These are the features that define the product and prove the market.
+
+1. Household and role system
+	•	Primary User
+	•	Trustee
+	•	Caregiver
+	•	Other
+	•	strict permissions by role
+	•	Trustee-only role changes
+	•	re-auth before sensitive actions
+	•	audit trail for role and access changes
+
+2. Bill management
+	•	manually add bills
+	•	categorize bills
+	•	due dates
+	•	recurring bill support
+	•	bill status: due, overdue, paid, pending approval
+	•	notes and attachments
+
+3. Approval workflow
+	•	bills added by Caregiver or Other go into pending approval
+	•	Trustee approves or rejects
+	•	PU and Trustee bills go live immediately
+
+4. Payment tracking
+	•	any member can mark a bill paid
+	•	Caregiver and Other must upload receipt before paid status is saved
+	•	PU and Trustee can mark paid directly
+	•	receipt stored with bill history
+
+5. Triage and risk alerts
+	•	overdue bills
+	•	upcoming due bills
+	•	shutoff-risk flag
+	•	late-fee-risk flag
+	•	low-balance risk for PU/Trustee only
+	•	“what should be handled first” ranking
+
+6. Linked account basics
+	•	Plaid account linking
+	•	balance fetch
+	•	transaction sync
+	•	basic payment verification support
+	•	role-scoped balance visibility
+
+7. Gmail bill scan
+	•	Gmail connect
+	•	read-only bill scan from trusted senders
+	•	import bill candidates
+	•	dedupe/review flow before creating live bills
+
+8. Mobile companion essentials
+	•	home summary
+	•	urgent bills
+	•	notification center
+	•	quick mark-paid flow
+	•	receipt upload
+	•	pending approvals for Trustee
+	•	household switcher
+	•	role-aware UI
+
+9. Notifications
+	•	overdue alert
+	•	pending approval alert
+	•	low-balance warning for PU/Trustee
+	•	bill marked paid
+	•	bill rejected
+	•	new bill assigned or reassigned
+	•	push notifications included in V1
+
+10. Documents
+	•	upload statements
+	•	upload receipts
+	•	attach files to bills
+	•	simple document list per bill or household
+
+⸻
+
+Should Have — add soon after launch
+
+These improve the experience but are not necessary to prove the product.
+
+1. Subscription review
+	•	recurring subscription section
+	•	cancel-guidance panel
+	•	provider contact info
+	•	review queue for possible unused subscriptions
+
+2. Better anomaly review
+	•	duplicate charge flag
+	•	unusual bill spike
+	•	recurring bill amount change
+	•	charge after cancellation flag
+	•	“review this transaction” workflow
+
+3. Better reporting
+	•	bill payment history
+	•	spending by category
+	•	household activity export
+	•	simple PDF/CSV exports
+
+4. Stronger admin tools
+	•	household count
+	•	scan health
+	•	sync failures
+	•	alert delivery monitoring
+
+5. Better multi-household support
+	•	especially for Trustees or caregivers helping multiple families
+
+⸻
+
+Later — V1.5 / V2
+
+These are valuable, but they make the app much heavier and should wait.
+
+1. Fall detection
+	•	not for V1
+
+2. Background voice distress detection
+	•	not for V1
+
+3. Advanced fraud/anomaly engine
+	•	geography checks
+	•	fraud pattern matching
+	•	broader behavioral modeling
+
+4. Rich subscription intelligence
+	•	automated inactivity scoring across many providers
+	•	deeper cancellation knowledge base
+	•	cancellation workflow automation
+
+5. Advanced identity verification
+	•	anything beyond re-auth + OTP + audit logs should wait unless truly needed
+
+6. Deep financial analytics
+	•	trend forecasting
+	•	household cash runway projections
+	•	advanced payment simulations
+
+7. Institutional use cases
+	•	healthcare providers
+	•	agencies
+	•	enterprise caregiver organizations
+
+⸻
+
+Recommended release sequence
+
+Phase 1 — foundation
+	•	household roles
+	•	auth and permissions
+	•	bill CRUD
+	•	approvals
+	•	receipts
+	•	documents
+	•	activity log
+
+Phase 2 — intelligence
+	•	triage dashboard
+	•	due/overdue risk logic
+	•	low-balance warning
+	•	recurring bills
+	•	prioritization logic
+
+Phase 3 — integrations
+	•	Plaid
+	•	Gmail scan
+	•	dedupe and import review
+	•	transaction matching
+
+Phase 4 — mobile + alerts
+	•	mobile companion
+	•	push notifications
+	•	quick action flows
+	•	household switching
+
+Phase 5 — polish
+	•	reports
+	•	subscription review
+	•	anomaly review
+	•	admin dashboard
+
+⸻
+
+Best V1 definition in one paragraph
+
+Kindue V1 should be a caregiver-safe household bill coordination app that lets families track bills, approve caregiver-added bills, upload receipts, see what is due, detect urgent risk, connect accounts for balance visibility, import bills from trusted Gmail senders, and receive mobile alerts — without moving money.
+
+⸻
+
+What to cut right now
+
+I would cut these from the first build:
+	•	fall detection
+	•	always-listening “help me” detection
+	•	advanced fraud language
+	•	complicated inactivity inference claims
+	•	enterprise-grade identity verification
+	•	anything that depends on perfect background mobile behavior
+
+⸻
+
+What proves the product fastest
+
+If you want the shortest path to validation, prove these 5 things:
+	•	families will invite a caregiver or trustee
+	•	caregivers will actually add and manage bills
+	•	trustees value the approval workflow
+	•	users understand and trust the triage ranking
+	•	alerts cause action before bills become a problem
+
+That is the heart of the business.

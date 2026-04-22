@@ -1,0 +1,80 @@
+What Kindue does
+Kindue is a household bill-monitoring and coordination app built for families, especially adult children helping aging parents or relatives manage bills. It does not move money or pay bills. Instead, it helps users see what is due, detect risk early, and coordinate who is responsible for handling each bill.
+
+Core features
+Kindue monitors common household bills such as:
+	•	utilities
+	•	telecom/internet
+	•	insurance
+	•	mortgage or rent
+	•	auto loans
+	•	credit cards
+	•	tolls
+	•	recurring subscriptions
+
+It supports:
+	•	bill tracking
+	•	due date and overdue alerts
+	•	risk detection for late fees, shutoff risk, and overdraft risk
+	•	payment prioritization when cash is limited
+	•	Gmail bill scanning from trusted billers
+	•	subscription identification and cancellation guidance
+	•	document storage for statements and bills
+	•	household collaboration with roles and notifications
+
+Who the caregivers are and who they care for
+The main users are:
+	•	older adults who want help staying organized
+	•	adult children helping parents
+	•	caregivers or trusted family members helping relatives who are overwhelmed, aging, ill, busy, or financially stressed
+
+The caregiver is usually a trusted person helping monitor bills, review risk, and coordinate next steps. They are caring for a parent, grandparent, spouse, sibling, or another dependent family member.
+
+What “triage” means here
+In this context, triage means helping a household decide what needs attention first when there are too many bills, limited cash, or limited caregiver availability.
+
+For example:
+	•	Which bill is closest to causing a shutoff?
+	•	Which unpaid bill will trigger the highest penalty?
+	•	If there is only $500 available, which bills should be paid first?
+	•	If one caregiver cannot respond, who should take over?
+
+So Kindue is not just reminding users. It is helping them rank urgency and act in the right order.
+
+Web app vs mobile app roles
+They serve related but slightly different purposes:
+	•	Web app: the full management dashboard for deeper work
+Best for reviewing bills, managing households, uploading documents, running reports, configuring settings, and handling admin tasks.
+	•	Mobile app: quick access and alerts on the go
+Best for notifications, checking urgent bills, viewing assignments, switching households, and handling simple actions quickly.
+
+Both apps should share the same core data, but the web app is the full control center while the mobile app is the fast-response companion.
+
+Who the users are
+Primary users:
+	•	elderly individuals
+	•	adult children caring for aging parents
+	•	families managing a loved one’s finances together
+	•	trusted caregivers helping someone stay on top of bills
+
+Not the main first audience:
+	•	healthcare providers
+	•	banks
+	•	institutions
+
+This is primarily a consumer/family household product.
+
+Features to prioritize for version 1
+For the first version, I would prioritize:
+	1.	bill entry and categorization
+	2.	due date tracking and overdue alerts
+	3.	multi-user household access with roles
+	4.	payment status tracking
+	5.	basic risk flags for late fee / shutoff risk
+	6.	Gmail scanning from trusted billers
+	7.	document upload for statements and bills
+	8.	notifications for caregivers and household members
+
+A very strong V1 focus statement would be:
+
+“Kindue helps families monitor household bills, catch risk early, and coordinate who handles what — especially when helping an aging parent or overwhelmed loved one.”
