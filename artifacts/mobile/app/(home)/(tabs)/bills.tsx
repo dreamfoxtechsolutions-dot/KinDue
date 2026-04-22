@@ -15,6 +15,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -23,9 +24,11 @@ import {
   useListBills,
   useCreateBill,
   useListHouseholds,
+  useListHouseholdMembers,
+  useGetMe,
   CreateBillBodyCategory,
 } from "@workspace/api-client-react";
-import type { Bill } from "@workspace/api-client-react";
+import type { Bill, HouseholdMember } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 
 function formatCurrency(amount: number) {
@@ -188,6 +191,14 @@ export default function BillsScreen() {
   const { data: households } = useListHouseholds();
   const activeId = householdId ?? households?.[0]?.id;
 
+  const { data: meData } = useGetMe();
+  const { data: members } = useListHouseholdMembers(activeId!, {
+    query: { enabled: !!activeId },
+  });
+  const myMember = members?.find((m: HouseholdMember) => m.userId === meData?.id);
+  const role = myMember?.role ?? "other";
+  const canCreate = role === "primary_user" || role === "trustee" || role === "caregiver";
+
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -221,8 +232,11 @@ export default function BillsScreen() {
       return;
     }
     const validCategories = Object.values(CreateBillBodyCategory);
-    const cat = validCategories.includes(createCategory as any)
-      ? (createCategory as any)
+    function isValidCategory(v: string): v is CreateBillBodyCategory {
+      return (validCategories as string[]).includes(v);
+    }
+    const cat: CreateBillBodyCategory = isValidCategory(createCategory)
+      ? createCategory
       : CreateBillBodyCategory.other;
     try {
       await createBillMutation.mutateAsync({
@@ -384,12 +398,14 @@ export default function BillsScreen() {
     <View style={s.container}>
       <View style={s.header}>
         <Text style={s.title}>Bills</Text>
-        <TouchableOpacity
-          style={s.addBtn}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowCreate(true); }}
-        >
-          <Feather name="plus" size={22} color="#ffffff" />
-        </TouchableOpacity>
+        {canCreate && (
+          <TouchableOpacity
+            style={s.addBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowCreate(true); }}
+          >
+            <Feather name="plus" size={22} color="#ffffff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -432,7 +448,7 @@ export default function BillsScreen() {
           renderItem={({ item }) => (
             <BillCard
               bill={item}
-              onPress={() => router.push(`/(home)/bills/${item.id}` as any)}
+              onPress={() => router.push(`/(home)/bills/${item.id}` as Href)}
             />
           )}
           contentContainerStyle={[

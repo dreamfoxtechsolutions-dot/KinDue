@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -40,7 +41,7 @@ export default function HouseholdSetupScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setHouseholdId(hh.id);
-      router.replace("/(home)/(tabs)" as any);
+      router.replace("/(home)/(tabs)" as Href);
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Failed to create household.");
     }

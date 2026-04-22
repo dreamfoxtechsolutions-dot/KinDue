@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { useSSO, useSignUp } from "@clerk/expo";
+import type { Href } from "expo-router";
 import { Link, useRouter } from "expo-router";
 import {
   View,
@@ -60,7 +61,7 @@ export default function SignUpScreen() {
         setActive!({
           session: createdSessionId,
           navigate: async ({ decorateUrl }) => {
-            router.replace(decorateUrl("/") as any);
+            router.replace(decorateUrl("/") as Href);
           },
         });
       }
@@ -98,7 +99,7 @@ export default function SignUpScreen() {
     await signUp.verifications.verifyEmailCode({ code });
     if (signUp.status === "complete") {
       await signUp.finalize({
-        navigate: ({ decorateUrl }) => router.replace(decorateUrl("/") as any),
+        navigate: ({ decorateUrl }) => router.replace(decorateUrl("/") as Href),
       });
     } else {
       setLocalError("Verification failed. Please try again.");

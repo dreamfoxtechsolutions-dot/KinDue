@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { useSSO, useSignIn } from "@clerk/expo";
+import type { Href } from "expo-router";
 import { Link, useRouter } from "expo-router";
 import {
   View,
@@ -56,7 +57,7 @@ export default function SignInScreen() {
         setActive!({
           session: createdSessionId,
           navigate: async ({ decorateUrl }) => {
-            router.replace(decorateUrl("/") as any);
+            router.replace(decorateUrl("/") as Href);
           },
         });
       }
@@ -79,7 +80,7 @@ export default function SignInScreen() {
     }
     if (signIn.status === "complete") {
       await signIn.finalize({
-        navigate: ({ decorateUrl }) => router.replace(decorateUrl("/") as any),
+        navigate: ({ decorateUrl }) => router.replace(decorateUrl("/") as Href),
       });
     }
   };

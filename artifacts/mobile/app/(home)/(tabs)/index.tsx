@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useUser } from "@clerk/expo";
@@ -152,14 +153,7 @@ export default function DashboardScreen() {
       color: colors.mutedForeground,
       marginTop: 2,
     },
-    notifBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.muted,
-      alignItems: "center",
-      justifyContent: "center",
-    },
+
     section: { paddingHorizontal: 20, marginBottom: 20 },
     sectionTitle: {
       fontSize: 14,
@@ -341,9 +335,6 @@ export default function DashboardScreen() {
           <Text style={s.greeting}>Hi, {firstName}</Text>
           <Text style={s.householdName}>{householdName}</Text>
         </View>
-        <TouchableOpacity style={s.notifBtn}>
-          <Feather name="bell" size={20} color={colors.foreground} />
-        </TouchableOpacity>
       </View>
 
       {hasLowBalanceRisk && (
@@ -394,7 +385,7 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 key={item.bill.id}
                 style={s.triageCard}
-                onPress={() => router.push(`/(home)/bills/${item.bill.id}` as any)}
+                onPress={() => router.push(`/(home)/bills/${item.bill.id}` as Href)}
                 activeOpacity={0.75}
               >
                 <View style={[s.priorityBadge, { backgroundColor: pColor }]}>

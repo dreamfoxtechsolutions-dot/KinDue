@@ -19,6 +19,7 @@ import {
   useListHouseholdMembers,
   useGetMe,
 } from "@workspace/api-client-react";
+import type { HouseholdMember } from "@workspace/api-client-react";
 
 function RoleBadge({ role }: { role: string }) {
   const colors = useColors();
@@ -111,7 +112,7 @@ export default function ProfileScreen() {
   });
 
   const myMember = members?.find(
-    (m: any) => m.userId === meData?.id
+    (m: HouseholdMember) => m.userId === meData?.id
   );
   const role = myMember?.role ?? "other";
 

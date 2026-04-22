@@ -27,6 +27,7 @@ import {
   useGetMe,
   useListHouseholds,
 } from "@workspace/api-client-react";
+import type { HouseholdMember } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 
 function formatCurrency(amount: number) {
@@ -102,11 +103,11 @@ export default function BillDetailScreen() {
     query: { enabled: !!activeId },
   });
 
-  const myMember = members?.find((m: any) => m.userId === meData?.id);
+  const myMember = members?.find((m: HouseholdMember) => m.userId === meData?.id);
   const role = myMember?.role ?? "other";
   const canApprove = role === "primary_user" || role === "trustee";
-  const canDelete = role === "primary_user" || role === "trustee";
-  const canPay = true;
+  const canDelete = role === "primary_user";
+  const canPay = role === "primary_user" || role === "trustee" || role === "caregiver";
 
   const approveMutation = useApproveBill();
   const rejectMutation = useRejectBill();
