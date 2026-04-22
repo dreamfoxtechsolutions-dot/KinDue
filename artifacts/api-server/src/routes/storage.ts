@@ -2,8 +2,8 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth } from "../middlewares/requireAuth";
-import { db, documentsTable, receiptsTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { db, documentsTable, receiptsTable, billsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { getMemberRole } from "../lib/memberGuard";
 
 const router: IRouter = Router();
@@ -53,37 +53,44 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
   }
 });
 
+async function resolveHouseholdForStorageKey(storageKey: string): Promise<number | null> {
+  const doc = await db.query.documentsTable.findFirst({
+    where: eq(documentsTable.storageKey, storageKey),
+    columns: { householdId: true },
+  });
+  if (doc) return doc.householdId;
+
+  const receipt = await db.query.receiptsTable.findFirst({
+    where: eq(receiptsTable.storageKey, storageKey),
+    columns: { billId: true },
+  });
+  if (!receipt) return null;
+
+  const bill = await db.query.billsTable.findFirst({
+    where: eq(billsTable.id, receipt.billId),
+    columns: { householdId: true },
+  });
+  return bill?.householdId ?? null;
+}
+
 router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
-    const storageKey = objectPath;
     const user = req.dbUser!;
 
-    const doc = await db.query.documentsTable.findFirst({
-      where: eq(documentsTable.storageKey, storageKey),
-    });
-    const receipt = doc
-      ? null
-      : await db.query.receiptsTable.findFirst({
-          where: eq(receiptsTable.storageKey, storageKey),
-        });
-
-    const householdId = doc?.householdId ?? null;
-
-    if (!householdId && !receipt) {
-      req.log.warn({ storageKey }, "Object not registered in documents or receipts");
+    const householdId = await resolveHouseholdForStorageKey(objectPath);
+    if (householdId === null) {
+      req.log.warn({ objectPath }, "Object not registered in documents or receipts");
       res.status(404).json({ error: "Object not found" });
       return;
     }
 
-    if (householdId) {
-      const role = await getMemberRole(householdId, user.id);
-      if (!role) {
-        res.status(403).json({ error: "Access denied" });
-        return;
-      }
+    const role = await getMemberRole(householdId, user.id);
+    if (!role) {
+      res.status(403).json({ error: "Access denied" });
+      return;
     }
 
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
