@@ -121,9 +121,7 @@ export default function DashboardScreen() {
     data: dashboard,
     isLoading: dashLoading,
     refetch: refetchDash,
-  } = useGetHouseholdDashboard(activeId!, {
-    query: { enabled: !!activeId },
-  });
+  } = useGetHouseholdDashboard(activeId ?? 0);
 
   const isLoading = householdsLoading || dashLoading;
   const firstName = user?.firstName ?? "there";
@@ -401,7 +399,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={s.triageAmount}>
-                    {formatCurrency(item.bill.amount)}
+                    {formatCurrency(item.bill.amount ?? 0)}
                   </Text>
                   <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
                 </View>

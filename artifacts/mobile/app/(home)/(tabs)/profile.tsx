@@ -107,9 +107,7 @@ export default function ProfileScreen() {
   const { data: households } = useListHouseholds();
   const activeId = householdId ?? households?.[0]?.id;
   const { data: meData } = useGetMe();
-  const { data: members } = useListHouseholdMembers(activeId!, {
-    query: { enabled: !!activeId },
-  });
+  const { data: members } = useListHouseholdMembers(activeId ?? 0);
 
   const myMember = members?.find(
     (m: HouseholdMember) => m.userId === meData?.id

@@ -95,13 +95,9 @@ export default function BillDetailScreen() {
   const { data: households } = useListHouseholds();
   const activeId = householdId ?? households?.[0]?.id;
 
-  const { data: bill, isLoading, refetch } = useGetBill(activeId!, billId, {
-    query: { enabled: !!activeId && !!billId },
-  });
+  const { data: bill, isLoading, refetch } = useGetBill(activeId ?? 0, billId);
   const { data: meData } = useGetMe();
-  const { data: members } = useListHouseholdMembers(activeId!, {
-    query: { enabled: !!activeId },
-  });
+  const { data: members } = useListHouseholdMembers(activeId ?? 0);
 
   const myMember = members?.find((m: HouseholdMember) => m.userId === meData?.id);
   const role = myMember?.role ?? "other";
@@ -375,8 +371,7 @@ export default function BillDetailScreen() {
           <Text style={s.sectionTitle}>Details</Text>
           {bill.dueDate && <InfoRow label="Due Date" value={bill.dueDate} />}
           {bill.category && <InfoRow label="Category" value={bill.category} />}
-          {bill.description && <InfoRow label="Description" value={bill.description} />}
-          {bill.paidDate && <InfoRow label="Paid On" value={bill.paidDate} />}
+          {bill.notes && <InfoRow label="Notes" value={bill.notes} />}
           {bill.rejectionReason && (
             <InfoRow label="Rejection Reason" value={bill.rejectionReason} />
           )}
@@ -422,7 +417,7 @@ export default function BillDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {canPay && bill.status === "approved" && (
+          {canPay && (bill.status === "due" || bill.status === "overdue") && (
             <TouchableOpacity
               style={[s.actionBtn, { backgroundColor: colors.success }]}
               onPress={() => setShowMarkPaidModal(true)}

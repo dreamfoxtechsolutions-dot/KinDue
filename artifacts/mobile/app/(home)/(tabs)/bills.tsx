@@ -27,6 +27,7 @@ import {
   useListHouseholdMembers,
   useGetMe,
   CreateBillBodyCategory,
+  ListBillsStatus,
 } from "@workspace/api-client-react";
 import type { Bill, HouseholdMember } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
@@ -43,7 +44,7 @@ function statusColor(
   colors: ReturnType<typeof useColors>
 ): string {
   switch (status) {
-    case "approved":
+    case "due":
       return colors.primary;
     case "pending_approval":
       return colors.warning;
@@ -60,8 +61,8 @@ function statusColor(
 
 function statusLabel(status: string): string {
   switch (status) {
-    case "approved":
-      return "Approved";
+    case "due":
+      return "Due";
     case "pending_approval":
       return "Pending";
     case "paid":
@@ -75,12 +76,12 @@ function statusLabel(status: string): string {
   }
 }
 
-type FilterStatus = "all" | "pending_approval" | "approved" | "paid" | "overdue";
+type FilterStatus = "all" | "pending_approval" | "due" | "paid" | "overdue";
 
 const FILTER_OPTIONS: { label: string; value: FilterStatus }[] = [
   { label: "All", value: "all" },
   { label: "Pending", value: "pending_approval" },
-  { label: "Approved", value: "approved" },
+  { label: "Due", value: "due" },
   { label: "Paid", value: "paid" },
   { label: "Overdue", value: "overdue" },
 ];
@@ -150,7 +151,7 @@ function BillCard({ bill, onPress }: { bill: Bill; onPress: () => void }) {
             { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
           ]}
         >
-          {formatCurrency(bill.amount)}
+          {formatCurrency(bill.amount ?? 0)}
         </Text>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </View>
@@ -192,9 +193,7 @@ export default function BillsScreen() {
   const activeId = householdId ?? households?.[0]?.id;
 
   const { data: meData } = useGetMe();
-  const { data: members } = useListHouseholdMembers(activeId!, {
-    query: { enabled: !!activeId },
-  });
+  const { data: members } = useListHouseholdMembers(activeId ?? 0);
   const myMember = members?.find((m: HouseholdMember) => m.userId === meData?.id);
   const role = myMember?.role ?? "other";
   const canCreate = role === "primary_user" || role === "trustee" || role === "caregiver";
@@ -209,15 +208,15 @@ export default function BillsScreen() {
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90;
 
+  const billsParams = filter !== "all"
+    ? { status: ListBillsStatus[filter as keyof typeof ListBillsStatus] }
+    : undefined;
+
   const {
     data: bills,
     isLoading,
     refetch,
-  } = useListBills(
-    activeId!,
-    filter !== "all" ? { status: filter } : {},
-    { query: { enabled: !!activeId } }
-  );
+  } = useListBills(activeId ?? 0, billsParams);
 
   const createBillMutation = useCreateBill();
 
