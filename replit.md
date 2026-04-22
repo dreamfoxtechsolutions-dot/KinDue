@@ -32,6 +32,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 - `artifacts/web` — Kindue web app (React/Vite at `/`)
 - `artifacts/api-server` — Express API server (`/api/*`)
+- `artifacts/mobile` — KinDue mobile app (Expo/React Native at `/mobile/`)
 
 ## Kindue Web Pages
 
@@ -67,6 +68,27 @@ Located in `lib/db/src/schema/`:
 - `plaid_items`, `plaid_accounts` — Plaid bank connections
 - `audit_logs` — immutable action log
 - `notification_settings` — per-user push/email prefs
+
+## KinDue Mobile App
+
+Located in `artifacts/mobile/`. Expo SDK 54, React Native.
+
+### Mobile Screens
+- `(auth)/sign-in` — Email + Google OAuth sign-in
+- `(auth)/sign-up` — Email + Google OAuth sign-up with email verification
+- `(home)/(tabs)/index` — Dashboard (overview stats, priority triage)
+- `(home)/(tabs)/bills` — Bills list (filter by status, create new bill)
+- `(home)/(tabs)/profile` — Profile, household info, role badge, sign out
+- `(home)/bills/[id]` — Bill detail: approve, reject, mark paid, delete
+- `(home)/household/setup` — Create new household
+
+### Mobile Auth
+- Uses `@clerk/expo` with `tokenCache` from `@clerk/expo/token-cache`
+- `setAuthTokenGetter` wired in `(home)/_layout.tsx`
+- `setBaseUrl` called at root module level in `app/_layout.tsx`
+
+### Mobile State
+- `context/householdStore.tsx` — persists selected household ID via AsyncStorage
 
 ## Important Notes
 
