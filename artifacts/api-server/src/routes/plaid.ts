@@ -129,6 +129,11 @@ router.get("/households/:householdId/accounts/:accountId/transactions", requireA
   const role = await getMemberRole(householdId, user.id);
   if (!canViewAccounts(role)) return res.status(403).json({ error: "Access denied" });
 
+  const account = await db.query.linkedAccountsTable.findFirst({
+    where: and(eq(linkedAccountsTable.id, accountId), eq(linkedAccountsTable.householdId, householdId)),
+  });
+  if (!account) return res.status(404).json({ error: "Account not found" });
+
   const transactions = await db.query.transactionsTable.findMany({
     where: eq(transactionsTable.linkedAccountId, accountId),
     orderBy: [desc(transactionsTable.date)],

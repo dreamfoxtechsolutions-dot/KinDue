@@ -28,6 +28,10 @@ export function canManageMembers(role: MemberRole | null): boolean {
   return role === "primary_user" || role === "trustee";
 }
 
+export function canChangeRoles(role: MemberRole | null): boolean {
+  return role === "primary_user";
+}
+
 export function canViewAudit(role: MemberRole | null): boolean {
   return role === "primary_user" || role === "trustee";
 }

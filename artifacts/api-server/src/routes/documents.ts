@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, documentsTable, receiptsTable } from "@workspace/db";
+import { db, documentsTable, receiptsTable, billsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getMemberRole, canDeleteDocuments } from "../lib/memberGuard";
@@ -81,6 +81,11 @@ router.get("/households/:householdId/bills/:billId/receipts", requireAuth, async
   const role = await getMemberRole(householdId, user.id);
   if (!role) return res.status(403).json({ error: "Access denied" });
 
+  const bill = await db.query.billsTable.findFirst({
+    where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
+  });
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+
   const receipts = await db.query.receiptsTable.findMany({
     where: eq(receiptsTable.billId, billId),
     orderBy: (t, { desc }) => [desc(t.createdAt)],
@@ -95,6 +100,11 @@ router.post("/households/:householdId/bills/:billId/receipts", requireAuth, asyn
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
   if (!role) return res.status(403).json({ error: "Access denied" });
+
+  const bill = await db.query.billsTable.findFirst({
+    where: and(eq(billsTable.id, billId), eq(billsTable.householdId, householdId)),
+  });
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
 
   const { fileName, mimeType, fileSize, storageKey } = req.body;
 

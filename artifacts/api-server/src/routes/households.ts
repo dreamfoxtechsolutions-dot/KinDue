@@ -8,7 +8,7 @@ import {
 } from "@workspace/db";
 import { and, eq, count, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getMemberRole, canManageMembers } from "../lib/memberGuard";
+import { getMemberRole, canManageMembers, canChangeRoles } from "../lib/memberGuard";
 import { logAudit } from "../lib/audit";
 
 const router = Router();
@@ -220,7 +220,7 @@ router.patch("/households/:householdId/members/:memberId", requireAuth, async (r
   const memberId = parseInt(req.params.memberId);
   const user = req.dbUser!;
   const role = await getMemberRole(householdId, user.id);
-  if (!canManageMembers(role)) return res.status(403).json({ error: "Access denied" });
+  if (!canChangeRoles(role)) return res.status(403).json({ error: "Only the Primary User can change member roles" });
 
   const { role: newRole } = req.body;
 
