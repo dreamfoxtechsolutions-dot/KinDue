@@ -33,6 +33,18 @@ minimumReleaseAgeExclude:
   # this setting guards against does not apply to our own packages.
   - '@replit/*'
   - stripe-replit-sync
+  - '@uppy/core'
+  - '@uppy/aws-s3'
+  - '@uppy/dashboard'
+  - '@uppy/react'
+  - '@uppy/utils'
+  - '@uppy/provider-views'
+  - '@uppy/informer'
+  - '@uppy/progress-bar'
+  - '@uppy/status-bar'
+  - '@uppy/store-default'
+  - '@clerk/themes'
+  - '@clerk/react'
 
 packages:
   - artifacts/*

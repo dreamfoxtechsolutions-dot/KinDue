@@ -3,20 +3,40 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Kindue household bill coordination API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication and user profile
+  - name: households
+    description: Household management
+  - name: members
+    description: Household member management
+  - name: bills
+    description: Bill management
+  - name: documents
+    description: Document and receipt management
+  - name: triage
+    description: Triage and risk assessment
+  - name: gmail
+    description: Gmail bill scanning
+  - name: plaid
+    description: Linked financial accounts
+  - name: audit
+    description: Audit log
+  - name: notifications
+    description: Notification settings
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +44,895 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── AUTH / USER PROFILE ──────────────────────────────────────────────────────
+
+  /me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMe
+      tags: [auth]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /me/notification-settings:
+    get:
+      operationId: getNotificationSettings
+      tags: [notifications]
+      summary: Get notification settings for current user
+      responses:
+        "200":
+          description: Notification settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+    patch:
+      operationId: updateNotificationSettings
+      tags: [notifications]
+      summary: Update notification settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+
+  /me/push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [notifications]
+      summary: Register a push notification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenBody"
+      responses:
+        "201":
+          description: Token registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushToken"
+
+  /me/push-tokens/{token}:
+    delete:
+      operationId: unregisterPushToken
+      tags: [notifications]
+      summary: Unregister a push notification token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Token removed
+
+  /me/re-authenticate:
+    post:
+      operationId: reAuthenticate
+      tags: [auth]
+      summary: Re-authenticate before sensitive actions (role changes, account unlinking)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReAuthenticateBody"
+      responses:
+        "200":
+          description: Re-authentication successful, returns a short-lived sensitive-action token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReAuthResponse"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── HOUSEHOLDS ───────────────────────────────────────────────────────────────
+
+  /households:
+    get:
+      operationId: listHouseholds
+      tags: [households]
+      summary: List households the current user belongs to
+      responses:
+        "200":
+          description: List of households
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Household"
+    post:
+      operationId: createHousehold
+      tags: [households]
+      summary: Create a new household
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHouseholdBody"
+      responses:
+        "201":
+          description: Created household
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Household"
+
+  /households/{householdId}:
+    get:
+      operationId: getHousehold
+      tags: [households]
+      summary: Get a household
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Household
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Household"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateHousehold
+      tags: [households]
+      summary: Update household details
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHouseholdBody"
+      responses:
+        "200":
+          description: Updated household
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Household"
+    delete:
+      operationId: deleteHousehold
+      tags: [households]
+      summary: Delete a household (PU only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "204":
+          description: Deleted
+
+  /households/{householdId}/dashboard:
+    get:
+      operationId: getHouseholdDashboard
+      tags: [households]
+      summary: Get dashboard summary for a household
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  # ── MEMBERS ──────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/members:
+    get:
+      operationId: listHouseholdMembers
+      tags: [members]
+      summary: List members of a household
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HouseholdMember"
+    post:
+      operationId: inviteHouseholdMember
+      tags: [members]
+      summary: Invite a member to the household (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteMemberBody"
+      responses:
+        "201":
+          description: Invited member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdMember"
+
+  /households/{householdId}/members/{memberId}:
+    patch:
+      operationId: updateHouseholdMember
+      tags: [members]
+      summary: Update a member's role (Trustee only, requires re-auth token)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/memberId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberBody"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdMember"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: removeHouseholdMember
+      tags: [members]
+      summary: Remove a member from the household (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/memberId"
+      responses:
+        "204":
+          description: Removed
+
+  # ── BILLS ────────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/bills:
+    get:
+      operationId: listBills
+      tags: [bills]
+      summary: List bills in a household
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [due, overdue, paid, pending_approval, all]
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bill"
+    post:
+      operationId: createBill
+      tags: [bills]
+      summary: Add a bill (any member; CG/Other bills go to pending_approval)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBillBody"
+      responses:
+        "201":
+          description: Created bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+
+  /households/{householdId}/bills/{billId}:
+    get:
+      operationId: getBill
+      tags: [bills]
+      summary: Get a bill
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      responses:
+        "200":
+          description: Bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateBill
+      tags: [bills]
+      summary: Update a bill (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBillBody"
+      responses:
+        "200":
+          description: Updated bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+    delete:
+      operationId: deleteBill
+      tags: [bills]
+      summary: Delete a bill (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      responses:
+        "204":
+          description: Deleted
+
+  /households/{householdId}/bills/{billId}/approve:
+    post:
+      operationId: approveBill
+      tags: [bills]
+      summary: Approve a pending bill (Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      responses:
+        "200":
+          description: Approved bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+
+  /households/{householdId}/bills/{billId}/reject:
+    post:
+      operationId: rejectBill
+      tags: [bills]
+      summary: Reject a pending bill (Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectBillBody"
+      responses:
+        "200":
+          description: Rejected bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+
+  /households/{householdId}/bills/{billId}/mark-paid:
+    post:
+      operationId: markBillPaid
+      tags: [bills]
+      summary: Mark a bill as paid (CG/Other require receipt upload first)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkBillPaidBody"
+      responses:
+        "200":
+          description: Updated bill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "422":
+          description: Receipt required before marking paid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── DOCUMENTS ────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents for a household
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - name: billId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a document (all roles can upload)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadDocumentBody"
+      responses:
+        "201":
+          description: Uploaded document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /households/{householdId}/documents/{documentId}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get document metadata
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/documentId"
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/documentId"
+      responses:
+        "204":
+          description: Deleted
+
+  # ── RECEIPTS ─────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/bills/{billId}/receipts:
+    get:
+      operationId: listReceipts
+      tags: [documents]
+      summary: List receipts for a bill
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      responses:
+        "200":
+          description: Receipts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+    post:
+      operationId: uploadReceipt
+      tags: [documents]
+      summary: Upload a payment receipt for a bill (required for CG/Other to mark paid)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/billId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadDocumentBody"
+      responses:
+        "201":
+          description: Uploaded receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  # ── TRIAGE ───────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/triage:
+    get:
+      operationId: getTriageSummary
+      tags: [triage]
+      summary: Get triage-ranked bill list with risk flags
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Triage summary with ranked bills and risk flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriageSummary"
+
+  # ── GMAIL ────────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/gmail-connection:
+    get:
+      operationId: getGmailConnection
+      tags: [gmail]
+      summary: Get Gmail connection status
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Gmail connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailConnection"
+    post:
+      operationId: connectGmail
+      tags: [gmail]
+      summary: Connect Gmail account (exchange OAuth code)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectGmailBody"
+      responses:
+        "201":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailConnection"
+    delete:
+      operationId: disconnectGmail
+      tags: [gmail]
+      summary: Disconnect Gmail account
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "204":
+          description: Disconnected
+
+  /households/{householdId}/gmail-connection/scan:
+    post:
+      operationId: scanGmailBills
+      tags: [gmail]
+      summary: Trigger Gmail scan and return new bill candidates
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailScanResult"
+
+  /households/{householdId}/gmail-bill-candidates:
+    get:
+      operationId: listGmailBillCandidates
+      tags: [gmail]
+      summary: List unreviewed Gmail bill candidates
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Bill candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GmailBillCandidate"
+
+  /households/{householdId}/gmail-bill-candidates/{candidateId}/accept:
+    post:
+      operationId: acceptGmailBillCandidate
+      tags: [gmail]
+      summary: Accept a Gmail bill candidate and create a bill
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/candidateId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptCandidateBody"
+      responses:
+        "201":
+          description: Created bill from candidate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+
+  /households/{householdId}/gmail-bill-candidates/{candidateId}/dismiss:
+    post:
+      operationId: dismissGmailBillCandidate
+      tags: [gmail]
+      summary: Dismiss a Gmail bill candidate
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/candidateId"
+      responses:
+        "200":
+          description: Dismissed candidate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailBillCandidate"
+
+  # ── PLAID / LINKED ACCOUNTS ──────────────────────────────────────────────────
+
+  /households/{householdId}/linked-accounts:
+    get:
+      operationId: listLinkedAccounts
+      tags: [plaid]
+      summary: List linked financial accounts (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Linked accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LinkedAccount"
+    post:
+      operationId: exchangePlaidToken
+      tags: [plaid]
+      summary: Exchange Plaid public token to link accounts
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExchangePlaidTokenBody"
+      responses:
+        "201":
+          description: Linked accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LinkedAccount"
+
+  /households/{householdId}/linked-accounts/link-token:
+    post:
+      operationId: createPlaidLinkToken
+      tags: [plaid]
+      summary: Create a Plaid Link token to initiate account linking
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+      responses:
+        "200":
+          description: Link token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaidLinkToken"
+
+  /households/{householdId}/linked-accounts/{accountId}:
+    delete:
+      operationId: unlinkAccount
+      tags: [plaid]
+      summary: Unlink a financial account (requires re-auth)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/accountId"
+      responses:
+        "204":
+          description: Unlinked
+
+  /households/{householdId}/linked-accounts/{accountId}/sync:
+    post:
+      operationId: syncAccountTransactions
+      tags: [plaid]
+      summary: Sync transactions and balances for a linked account
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - $ref: "#/components/parameters/accountId"
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  /households/{householdId}/transactions:
+    get:
+      operationId: listTransactions
+      tags: [plaid]
+      summary: List synced transactions (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - name: accountId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+  # ── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+  /households/{householdId}/audit-log:
+    get:
+      operationId: getAuditLog
+      tags: [audit]
+      summary: Get audit log entries (PU/Trustee only)
+      parameters:
+        - $ref: "#/components/parameters/householdId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
+# ── PARAMETERS ───────────────────────────────────────────────────────────────
+
 components:
+  parameters:
+    householdId:
+      name: householdId
+      in: path
+      required: true
+      schema:
+        type: integer
+    memberId:
+      name: memberId
+      in: path
+      required: true
+      schema:
+        type: integer
+    billId:
+      name: billId
+      in: path
+      required: true
+      schema:
+        type: integer
+    documentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: integer
+    candidateId:
+      name: candidateId
+      in: path
+      required: true
+      schema:
+        type: integer
+    accountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: integer
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +942,876 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # ── USER ────────────────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - clerkId
+        - email
+        - createdAt
+
+    UpdateUserBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+
+    ReAuthenticateBody:
+      type: object
+      properties:
+        otpCode:
+          type: string
+          description: OTP code sent to user's email or phone
+      required:
+        - otpCode
+
+    ReAuthResponse:
+      type: object
+      properties:
+        sensitiveToken:
+          type: string
+          description: Short-lived token (15 min) required for sensitive operations
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - sensitiveToken
+        - expiresAt
+
+    # ── HOUSEHOLD ────────────────────────────────────────────────────────────────
+
+    Household:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        primaryUserId:
+          type: integer
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - primaryUserId
+        - memberCount
+        - createdAt
+        - updatedAt
+
+    CreateHouseholdBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+      required:
+        - name
+
+    UpdateHouseholdBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+
+    DashboardSummary:
+      type: object
+      properties:
+        overdueCount:
+          type: integer
+        dueSoonCount:
+          type: integer
+          description: Bills due within 7 days
+        pendingApprovalCount:
+          type: integer
+        totalMonthlyEstimate:
+          type: number
+        hasLowBalanceRisk:
+          type: boolean
+          description: True if any linked account balance is below safe threshold (PU/T only)
+        topTriageItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TriageItem"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+      required:
+        - overdueCount
+        - dueSoonCount
+        - pendingApprovalCount
+        - totalMonthlyEstimate
+        - hasLowBalanceRisk
+        - topTriageItems
+        - recentActivity
+
+    # ── MEMBERS ──────────────────────────────────────────────────────────────────
+
+    HouseholdMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        userId:
+          type: integer
+        role:
+          type: string
+          enum: [primary_user, trustee, caregiver, other]
+        inviteEmail:
+          type: ["string", "null"]
+        inviteStatus:
+          type: string
+          enum: [pending, accepted, declined]
+        user:
+          $ref: "#/components/schemas/User"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - userId
+        - role
+        - inviteStatus
+        - createdAt
+        - updatedAt
+
+    InviteMemberBody:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [trustee, caregiver, other]
+      required:
+        - email
+        - role
+
+    UpdateMemberBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [trustee, caregiver, other]
+        sensitiveToken:
+          type: string
+          description: Re-auth token required for role changes
+      required:
+        - role
+        - sensitiveToken
+
+    # ── BILLS ────────────────────────────────────────────────────────────────────
+
+    Bill:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+          enum: [utilities, telecom, insurance, mortgage_rent, auto_loan, credit_card, tolls, subscription, other]
+        amount:
+          type: ["number", "null"]
+        dueDate:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [due, overdue, paid, pending_approval, rejected]
+        isRecurring:
+          type: boolean
+        recurrenceInterval:
+          type: ["string", "null"]
+          enum: [weekly, monthly, quarterly, annual, "null"]
+        notes:
+          type: ["string", "null"]
+        billerName:
+          type: ["string", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+        requiresReceipt:
+          type: boolean
+          description: True if the next mark-paid action requires a receipt (for CG/Other)
+        receiptUploaded:
+          type: boolean
+        riskFlags:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskFlag"
+        createdByRole:
+          type: string
+          enum: [primary_user, trustee, caregiver, other]
+        assignedToMemberId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - name
+        - category
+        - status
+        - isRecurring
+        - requiresReceipt
+        - receiptUploaded
+        - riskFlags
+        - createdByRole
+        - createdAt
+        - updatedAt
+
+    CreateBillBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [utilities, telecom, insurance, mortgage_rent, auto_loan, credit_card, tolls, subscription, other]
+        amount:
+          type: number
+        dueDate:
+          type: string
+          format: date-time
+        isRecurring:
+          type: boolean
+        recurrenceInterval:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+        notes:
+          type: string
+        billerName:
+          type: string
+        assignedToMemberId:
+          type: integer
+      required:
+        - name
+        - category
+
+    UpdateBillBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [utilities, telecom, insurance, mortgage_rent, auto_loan, credit_card, tolls, subscription, other]
+        amount:
+          type: number
+        dueDate:
+          type: string
+          format: date-time
+        isRecurring:
+          type: boolean
+        recurrenceInterval:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+        notes:
+          type: string
+        billerName:
+          type: string
+        assignedToMemberId:
+          type: integer
+
+    RejectBillBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    MarkBillPaidBody:
+      type: object
+      properties:
+        paidDate:
+          type: string
+          format: date-time
+
+    RiskFlag:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [overdue, shutoff_risk, late_fee_risk, low_balance_risk, upcoming_due]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        message:
+          type: string
+        daysUntilDue:
+          type: ["integer", "null"]
+      required:
+        - type
+        - severity
+        - message
+
+    # ── TRIAGE ───────────────────────────────────────────────────────────────────
+
+    TriageItem:
+      type: object
+      properties:
+        bill:
+          $ref: "#/components/schemas/Bill"
+        priorityScore:
+          type: number
+          description: Computed priority (higher = handle first)
+        priorityReason:
+          type: string
+          description: Human-readable explanation of the ranking
+        rank:
+          type: integer
+      required:
+        - bill
+        - priorityScore
+        - priorityReason
+        - rank
+
+    TriageSummary:
+      type: object
+      properties:
+        rankedBills:
+          type: array
+          items:
+            $ref: "#/components/schemas/TriageItem"
+        totalOverdue:
+          type: integer
+        totalDueSoon:
+          type: integer
+        estimatedCashNeeded:
+          type: number
+        availableBalance:
+          type: ["number", "null"]
+          description: Sum of linked account balances (null if no accounts linked or role lacks access)
+      required:
+        - rankedBills
+        - totalOverdue
+        - totalDueSoon
+        - estimatedCashNeeded
+
+    # ── DOCUMENTS ────────────────────────────────────────────────────────────────
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        billId:
+          type: ["integer", "null"]
+        type:
+          type: string
+          enum: [statement, receipt, other]
+        fileName:
+          type: string
+        fileSize:
+          type: integer
+        mimeType:
+          type: string
+        storageKey:
+          type: string
+        downloadUrl:
+          type: string
+        uploadedByUserId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - type
+        - fileName
+        - fileSize
+        - mimeType
+        - storageKey
+        - downloadUrl
+        - uploadedByUserId
+        - createdAt
+
+    UploadDocumentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        storageKey:
+          type: string
+          description: Object storage key from direct upload
+        billId:
+          type: integer
+        type:
+          type: string
+          enum: [statement, receipt, other]
+      required:
+        - fileName
+        - mimeType
+        - fileSize
+        - storageKey
+        - type
+
+    # ── GMAIL ─────────────────────────────────────────────────────────────────────
+
+    GmailConnection:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        email:
+          type: string
+        connected:
+          type: boolean
+        lastScanAt:
+          type: ["string", "null"]
+          format: date-time
+        candidatesFound:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - email
+        - connected
+        - candidatesFound
+        - createdAt
+
+    ConnectGmailBody:
+      type: object
+      properties:
+        code:
+          type: string
+          description: OAuth authorization code from Google
+        redirectUri:
+          type: string
+      required:
+        - code
+        - redirectUri
+
+    GmailScanResult:
+      type: object
+      properties:
+        newCandidatesFound:
+          type: integer
+        totalCandidatesPending:
+          type: integer
+        scannedAt:
+          type: string
+          format: date-time
+      required:
+        - newCandidatesFound
+        - totalCandidatesPending
+        - scannedAt
+
+    GmailBillCandidate:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        emailSubject:
+          type: string
+        emailFrom:
+          type: string
+        emailDate:
+          type: string
+          format: date-time
+        extractedBillerName:
+          type: ["string", "null"]
+        extractedAmount:
+          type: ["number", "null"]
+        extractedDueDate:
+          type: ["string", "null"]
+          format: date-time
+        suggestedCategory:
+          type: ["string", "null"]
+          enum: [utilities, telecom, insurance, mortgage_rent, auto_loan, credit_card, tolls, subscription, other, "null"]
+        status:
+          type: string
+          enum: [pending, accepted, dismissed]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - emailSubject
+        - emailFrom
+        - emailDate
+        - status
+        - createdAt
+
+    AcceptCandidateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [utilities, telecom, insurance, mortgage_rent, auto_loan, credit_card, tolls, subscription, other]
+        amount:
+          type: number
+        dueDate:
+          type: string
+          format: date-time
+        isRecurring:
+          type: boolean
+        recurrenceInterval:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+
+    # ── PLAID ─────────────────────────────────────────────────────────────────────
+
+    PlaidLinkToken:
+      type: object
+      properties:
+        linkToken:
+          type: string
+        expiration:
+          type: string
+          format: date-time
+      required:
+        - linkToken
+        - expiration
+
+    ExchangePlaidTokenBody:
+      type: object
+      properties:
+        publicToken:
+          type: string
+        institutionId:
+          type: string
+        institutionName:
+          type: string
+      required:
+        - publicToken
+        - institutionId
+        - institutionName
+
+    LinkedAccount:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        institutionName:
+          type: string
+        institutionId:
+          type: string
+        accountName:
+          type: string
+        accountType:
+          type: string
+          enum: [checking, savings, credit, investment, other]
+        mask:
+          type: ["string", "null"]
+          description: Last 4 digits of account number
+        currentBalance:
+          type: ["number", "null"]
+        availableBalance:
+          type: ["number", "null"]
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - institutionName
+        - institutionId
+        - accountName
+        - accountType
+        - createdAt
+
+    SyncResult:
+      type: object
+      properties:
+        transactionsSynced:
+          type: integer
+        balanceUpdated:
+          type: boolean
+        syncedAt:
+          type: string
+          format: date-time
+      required:
+        - transactionsSynced
+        - balanceUpdated
+        - syncedAt
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        linkedAccountId:
+          type: integer
+        plaidTransactionId:
+          type: string
+        name:
+          type: string
+        merchantName:
+          type: ["string", "null"]
+        amount:
+          type: number
+        date:
+          type: string
+          format: date-time
+        category:
+          type: ["string", "null"]
+        pending:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - linkedAccountId
+        - plaidTransactionId
+        - name
+        - amount
+        - date
+        - pending
+        - createdAt
+
+    # ── AUDIT LOG ─────────────────────────────────────────────────────────────────
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        actorUserId:
+          type: integer
+        actorName:
+          type: ["string", "null"]
+        action:
+          type: string
+          description: e.g. bill.approved, member.role_changed, bill.paid
+        entityType:
+          type: string
+          description: e.g. bill, member, document
+        entityId:
+          type: ["integer", "null"]
+        details:
+          type: ["string", "null"]
+          description: Human-readable summary of the change
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - householdId
+        - actorUserId
+        - action
+        - entityType
+        - createdAt
+
+    # ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+
+    NotificationSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        emailOverdue:
+          type: boolean
+        emailPendingApproval:
+          type: boolean
+        emailBillPaid:
+          type: boolean
+        emailBillRejected:
+          type: boolean
+        emailLowBalance:
+          type: boolean
+        pushOverdue:
+          type: boolean
+        pushPendingApproval:
+          type: boolean
+        pushBillPaid:
+          type: boolean
+        pushBillRejected:
+          type: boolean
+        pushLowBalance:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - emailOverdue
+        - emailPendingApproval
+        - emailBillPaid
+        - emailBillRejected
+        - emailLowBalance
+        - pushOverdue
+        - pushPendingApproval
+        - pushBillPaid
+        - pushBillRejected
+        - pushLowBalance
+        - updatedAt
+
+    UpdateNotificationSettingsBody:
+      type: object
+      properties:
+        emailOverdue:
+          type: boolean
+        emailPendingApproval:
+          type: boolean
+        emailBillPaid:
+          type: boolean
+        emailBillRejected:
+          type: boolean
+        emailLowBalance:
+          type: boolean
+        pushOverdue:
+          type: boolean
+        pushPendingApproval:
+          type: boolean
+        pushBillPaid:
+          type: boolean
+        pushBillRejected:
+          type: boolean
+        pushLowBalance:
+          type: boolean
+
+    PushToken:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        token:
+          type: string
+        platform:
+          type: string
+          enum: [ios, android, web]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - token
+        - platform
+        - createdAt
+
+    RegisterPushTokenBody:
+      type: object
+      properties:
+        token:
+          type: string
+        platform:
+          type: string
+          enum: [ios, android, web]
+      required:
+        - token
+        - platform
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            size:
+              type: integer
+            contentType:
+              type: string
+      required:
+        - uploadURL
+        - objectPath
+        - metadata
