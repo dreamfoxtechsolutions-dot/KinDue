@@ -18,7 +18,7 @@ router.get("/households/:householdId/accounts", requireAuth, async (req, res) =>
     orderBy: [desc(linkedAccountsTable.createdAt)],
   });
 
-  res.json(accounts.map((a) => ({
+  res.json(accounts.map(({ plaidAccessToken: _plaidAccessToken, ...a }) => ({
     ...a,
     currentBalance: a.currentBalance ? parseFloat(a.currentBalance) : null,
     availableBalance: a.availableBalance ? parseFloat(a.availableBalance) : null,
@@ -74,10 +74,11 @@ router.post("/households/:householdId/accounts/exchange", requireAuth, async (re
     details: `Linked account at ${institutionName}`,
   });
 
+  const { plaidAccessToken: _token, ...safeAccount } = account;
   res.status(201).json({
-    ...account,
-    currentBalance: account.currentBalance ? parseFloat(account.currentBalance) : null,
-    availableBalance: account.availableBalance ? parseFloat(account.availableBalance) : null,
+    ...safeAccount,
+    currentBalance: safeAccount.currentBalance ? parseFloat(safeAccount.currentBalance) : null,
+    availableBalance: safeAccount.availableBalance ? parseFloat(safeAccount.availableBalance) : null,
   });
 });
 
