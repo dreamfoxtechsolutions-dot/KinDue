@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import { useAuth, useUser } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
@@ -922,6 +923,14 @@ export default function ProfileScreen() {
   const canChangeRoles = role === "primary_user";
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
   const [showMemberActions, setShowMemberActions] = useState(false);
+  const [, setTick] = useState(0);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const id = setInterval(() => setTick((t) => t + 1), 60_000);
+      return () => clearInterval(id);
+    }, [])
+  );
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90;
