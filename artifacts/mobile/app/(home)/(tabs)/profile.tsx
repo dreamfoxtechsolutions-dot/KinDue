@@ -785,11 +785,11 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {activeId && members && members.length > 0 && (
+        {activeId && (members || canManageMembers) && (
           <View style={s.section}>
             <Text style={s.sectionLabel}>Members</Text>
             <View style={s.sectionCard}>
-              {members.map((m: HouseholdMember, idx: number) => (
+              {members?.map((m: HouseholdMember, idx: number) => (
                 <React.Fragment key={m.id}>
                   {idx > 0 && (
                     <View style={[s.separator, { marginLeft: 66 }]} />
@@ -820,7 +820,9 @@ export default function ProfileScreen() {
 
               {canManageMembers && (
                 <>
-                  <View style={[s.separator, { marginLeft: 66 }]} />
+                  {members && members.length > 0 && (
+                    <View style={[s.separator, { marginLeft: 66 }]} />
+                  )}
                   <TouchableOpacity
                     style={s.inviteRow}
                     onPress={() => setShowInviteModal(true)}
