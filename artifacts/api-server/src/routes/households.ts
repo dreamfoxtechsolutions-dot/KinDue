@@ -235,6 +235,8 @@ router.get("/households/:householdId/members", requireAuth, async (req, res) => 
       householdId: m.householdId,
       userId: m.userId,
       role: m.role,
+      inviteEmail: m.inviteEmail ?? null,
+      inviteStatus: m.inviteEmail ? "pending" : "accepted",
       displayName: m.user?.displayName ?? m.inviteEmail ?? "Unknown",
       email: m.user?.email ?? m.inviteEmail ?? "",
       avatarUrl: m.user?.avatarUrl ?? null,
@@ -258,6 +260,34 @@ router.post("/households/:householdId/members", requireAuth, async (req, res) =>
   const targetUser = await db.query.usersTable.findFirst({
     where: eq(ut.email, email),
   });
+
+  const existingInvite = await db.query.householdMembersTable.findFirst({
+    where: and(
+      eq(householdMembersTable.householdId, householdId),
+      eq(householdMembersTable.inviteEmail, email),
+    ),
+  });
+
+  if (existingInvite) {
+    const [refreshed] = await db
+      .update(householdMembersTable)
+      .set({ updatedAt: new Date() })
+      .where(eq(householdMembersTable.id, existingInvite.id))
+      .returning();
+
+    await logAudit({
+      householdId,
+      actorUserId: user.id,
+      actorName: user.displayName,
+      action: "member.invite_resent",
+      entityType: "member",
+      entityId: existingInvite.id,
+      details: `Resent invite to ${email}`,
+    });
+
+    res.status(200).json(refreshed);
+    return;
+  }
 
   const [member] = await db
     .insert(householdMembersTable)

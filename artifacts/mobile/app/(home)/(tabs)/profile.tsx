@@ -540,6 +540,7 @@ function MemberActionsSheet({
   const insets = useSafeAreaInsets();
   const updateMutation = useUpdateHouseholdMember();
   const removeMutation = useRemoveHouseholdMember();
+  const inviteMutation = useInviteHouseholdMember();
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UpdateMemberBodyRole>("caregiver");
 
@@ -590,6 +591,47 @@ function MemberActionsSheet({
               Alert.alert("Member removed", `${memberDisplayName(member)} has been removed from the household.`);
             } catch (e: unknown) {
               Alert.alert("Could not remove member", errMsg(e, "Please try again."));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResendInvite = async () => {
+    if (!member || !member.inviteEmail) return;
+    const role = (member.role === "primary_user" ? "other" : member.role) as InviteMemberBodyRole;
+    try {
+      await inviteMutation.mutateAsync({
+        householdId,
+        data: { email: member.inviteEmail, role },
+      });
+      onSuccess();
+      onClose();
+      Alert.alert("Invite resent", `A new invitation has been sent to ${member.inviteEmail}.`);
+    } catch (e: unknown) {
+      Alert.alert("Could not resend invite", errMsg(e, "Please try again."));
+    }
+  };
+
+  const handleCancelInvite = () => {
+    if (!member) return;
+    const email = member.inviteEmail ?? memberDisplayName(member);
+    Alert.alert(
+      "Cancel Invite",
+      `Cancel the pending invite for ${email}?`,
+      [
+        { text: "Keep Invite", style: "cancel" },
+        {
+          text: "Cancel Invite",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeMutation.mutateAsync({ householdId, memberId: member.id });
+              onSuccess();
+              onClose();
+            } catch (e: unknown) {
+              Alert.alert("Could not cancel invite", errMsg(e, "Please try again."));
             }
           },
         },
@@ -707,6 +749,7 @@ function MemberActionsSheet({
   if (!member) return null;
 
   const displayName = memberDisplayName(member);
+  const isPendingInvite = member.inviteStatus === "pending";
   const roleLabels: Record<string, string> = {
     primary_user: "Primary User",
     trustee: "Trustee",
@@ -721,9 +764,45 @@ function MemberActionsSheet({
           <View style={s.sheet}>
             <View style={s.handle} />
             <Text style={s.memberName} numberOfLines={1}>{displayName}</Text>
-            <Text style={s.memberRole}>{roleLabels[member.role] ?? member.role}</Text>
+            {isPendingInvite ? (
+              <Text style={[s.memberRole, { color: colors.warning }]}>Invite Pending</Text>
+            ) : (
+              <Text style={s.memberRole}>{roleLabels[member.role] ?? member.role}</Text>
+            )}
 
-            {showRolePicker ? (
+            {isPendingInvite ? (
+              <>
+                <TouchableOpacity
+                  style={s.actionBtn}
+                  onPress={handleResendInvite}
+                  disabled={inviteMutation.isPending || removeMutation.isPending}
+                  activeOpacity={0.7}
+                >
+                  {inviteMutation.isPending ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Feather name="send" size={20} color={colors.primary} />
+                  )}
+                  <Text style={[s.actionLabel, { color: colors.primary }]}>Resend Invite</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.actionBtn}
+                  onPress={handleCancelInvite}
+                  disabled={removeMutation.isPending || inviteMutation.isPending}
+                  activeOpacity={0.7}
+                >
+                  {removeMutation.isPending ? (
+                    <ActivityIndicator size="small" color={colors.destructive} />
+                  ) : (
+                    <Feather name="x-circle" size={20} color={colors.destructive} />
+                  )}
+                  <Text style={s.actionLabelDanger}>Cancel Invite</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.cancelBtn} onPress={onClose}>
+                  <Text style={s.cancelText}>Dismiss</Text>
+                </TouchableOpacity>
+              </>
+            ) : showRolePicker ? (
               <>
                 <Text style={s.sectionTitle}>Select New Role</Text>
                 <View style={s.roleRow}>
@@ -1089,7 +1168,8 @@ export default function ProfileScreen() {
               {members?.map((m: HouseholdMember, idx: number) => {
                 const isSelf = m.userId === meData?.id;
                 const isPrimaryUser = m.role === "primary_user";
-                const canTap = canActOnMembers && !isSelf && !isPrimaryUser;
+                const isPendingInviteRow = m.inviteStatus === "pending";
+                const canTap = canActOnMembers && !isPrimaryUser && (!isSelf || isPendingInviteRow);
                 return (
                   <React.Fragment key={m.id}>
                     {idx > 0 && (
