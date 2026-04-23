@@ -83,6 +83,7 @@ export const BillCategory = {
 export type BillStatus = (typeof BillStatus)[keyof typeof BillStatus];
 
 export const BillStatus = {
+  approved: "approved",
   due: "due",
   overdue: "overdue",
   paid: "paid",

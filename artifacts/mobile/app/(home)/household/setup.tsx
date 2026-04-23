@@ -42,8 +42,9 @@ export default function HouseholdSetupScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setHouseholdId(hh.id);
       router.replace("/(home)/(tabs)" as Href);
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Failed to create household.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create household.";
+      Alert.alert("Error", msg);
     }
   };
 

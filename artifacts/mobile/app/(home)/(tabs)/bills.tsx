@@ -36,7 +36,12 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount / 100);
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+function errMsg(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : fallback;
 }
 
 function statusColor(
@@ -225,8 +230,8 @@ export default function BillsScreen() {
       Alert.alert("Required", "Please enter a name and amount.");
       return;
     }
-    const amountCents = Math.round(parseFloat(createAmount) * 100);
-    if (isNaN(amountCents)) {
+    const amountDollars = parseFloat(createAmount);
+    if (isNaN(amountDollars) || amountDollars <= 0) {
       Alert.alert("Invalid Amount", "Please enter a valid amount.");
       return;
     }
@@ -242,7 +247,7 @@ export default function BillsScreen() {
         householdId: activeId!,
         data: {
           name: createName,
-          amount: amountCents,
+          amount: amountDollars,
           dueDate: createDue || undefined,
           category: cat,
         },
@@ -254,8 +259,8 @@ export default function BillsScreen() {
       setCreateDue("");
       setCreateCategory("");
       refetch();
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Failed to create bill.");
+    } catch (e: unknown) {
+      Alert.alert("Error", errMsg(e, "Failed to create bill."));
     }
   };
 

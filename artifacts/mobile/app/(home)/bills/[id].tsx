@@ -34,7 +34,12 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount / 100);
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+function errMsg(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : fallback;
 }
 
 function statusColor(
@@ -129,8 +134,8 @@ export default function BillDetailScreen() {
       await approveMutation.mutateAsync({ householdId: activeId, billId });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       refetch();
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not approve bill.");
+    } catch (e: unknown) {
+      Alert.alert("Error", errMsg(e, "Could not approve bill."));
     }
   };
 
@@ -145,8 +150,8 @@ export default function BillDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setShowRejectModal(false);
       refetch();
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not reject bill.");
+    } catch (e: unknown) {
+      Alert.alert("Error", errMsg(e, "Could not reject bill."));
     }
   };
 
@@ -161,8 +166,8 @@ export default function BillDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowMarkPaidModal(false);
       refetch();
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not mark bill as paid.");
+    } catch (e: unknown) {
+      Alert.alert("Error", errMsg(e, "Could not mark bill as paid."));
     }
   };
 
@@ -181,8 +186,8 @@ export default function BillDetailScreen() {
               await deleteMutation.mutateAsync({ householdId: activeId, billId });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               router.back();
-            } catch (e: any) {
-              Alert.alert("Error", e?.message ?? "Could not delete bill.");
+            } catch (e: unknown) {
+              Alert.alert("Error", errMsg(e, "Could not delete bill."));
             }
           },
         },
@@ -417,7 +422,7 @@ export default function BillDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {canPay && (bill.status === "due" || bill.status === "overdue") && (
+          {canPay && (bill.status === "due" || bill.status === "overdue" || bill.status === "approved") && (
             <TouchableOpacity
               style={[s.actionBtn, { backgroundColor: colors.success }]}
               onPress={() => setShowMarkPaidModal(true)}

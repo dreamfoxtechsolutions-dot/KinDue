@@ -1171,7 +1171,7 @@ components:
           format: date-time
         status:
           type: string
-          enum: [due, overdue, paid, pending_approval, rejected]
+          enum: [approved, due, overdue, paid, pending_approval, rejected]
         isRecurring:
           type: boolean
         recurrenceInterval:

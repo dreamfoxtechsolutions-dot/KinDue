@@ -37,7 +37,7 @@ export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { startSSOFlow } = useSSO();
-  const { signIn, errors: signInErrors, fetchStatus } = useSignIn();
+  const { signIn, fetchStatus } = useSignIn();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -86,11 +86,7 @@ export default function SignInScreen() {
     }
   };
 
-  const signInErrorList = signInErrors as unknown as { message?: string }[] | undefined;
-  const errorMsg =
-    localError ||
-    (signInErrorList && signInErrorList.length > 0 && signInErrorList[0]?.message) ||
-    "";
+  const errorMsg = localError;
 
   const styles = StyleSheet.create({
     container: {
