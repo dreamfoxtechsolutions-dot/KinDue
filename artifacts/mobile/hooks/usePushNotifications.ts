@@ -1,8 +1,13 @@
 import { useEffect, useRef } from "react";
-import { Platform, Alert } from "react-native";
+import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useAuth } from "@clerk/expo";
+import { useRouter } from "expo-router";
 import Constants from "expo-constants";
+import {
+  useRegisterPushToken,
+  useUnregisterPushToken,
+} from "@workspace/api-client-react";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -13,44 +18,6 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
-
-async function registerPushToken(token: string, getToken: () => Promise<string | null>) {
-  const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "";
-  const authToken = await getToken();
-  if (!authToken) return;
-  try {
-    await fetch(`${baseUrl}/api/me/push-tokens`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ token, platform: Platform.OS }),
-    });
-  } catch {
-    console.warn("[push] Failed to register push token");
-  }
-}
-
-async function unregisterPushToken(token: string, getToken: () => Promise<string | null>) {
-  const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : "";
-  const authToken = await getToken();
-  if (!authToken) return;
-  try {
-    await fetch(`${baseUrl}/api/me/push-tokens/${encodeURIComponent(token)}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-      },
-    });
-  } catch {
-    console.warn("[push] Failed to unregister push token");
-  }
-}
 
 async function setupAndroidChannel() {
   if (Platform.OS === "android") {
@@ -66,17 +33,23 @@ async function setupAndroidChannel() {
 }
 
 export function usePushNotifications() {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn } = useAuth();
+  const router = useRouter();
   const tokenRef = useRef<string | null>(null);
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
+  const { mutateAsync: registerToken } = useRegisterPushToken();
+  const { mutateAsync: unregisterToken } = useUnregisterPushToken();
+
   useEffect(() => {
     if (!isSignedIn) {
-      if (tokenRef.current && getToken) {
+      if (tokenRef.current) {
         const t = tokenRef.current;
         tokenRef.current = null;
-        unregisterPushToken(t, getToken).catch(() => {});
+        unregisterToken({ token: t }).catch(() => {
+          console.warn("[push] Failed to unregister push token");
+        });
       }
       return;
     }
@@ -114,15 +87,22 @@ export function usePushNotifications() {
         const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
         if (!mounted) return;
         tokenRef.current = tokenData.data;
-        await registerPushToken(tokenData.data, getToken);
+        const platform = (["ios", "android", "web"] as const).includes(
+          Platform.OS as "ios" | "android" | "web"
+        )
+          ? (Platform.OS as "ios" | "android" | "web")
+          : "ios";
+        await registerToken({ data: { token: tokenData.data, platform } });
       } catch (err) {
-        console.log("[push] Could not get push token:", err);
+        console.log("[push] Could not get or register push token:", err);
       }
     })();
 
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log("[push] Notification received:", notification.request.content.title);
+        const title = notification.request.content.title ?? "KinDue";
+        const body = notification.request.content.body ?? "";
+        console.log(`[push] Notification received: ${title} — ${body}`);
       }
     );
 
@@ -130,6 +110,10 @@ export function usePushNotifications() {
       (response) => {
         const data = response.notification.request.content.data as Record<string, unknown>;
         console.log("[push] Notification tapped, data:", data);
+        const billId = data?.billId;
+        if (billId !== undefined && billId !== null) {
+          router.push(`/(home)/bills/${String(billId)}` as Parameters<typeof router.push>[0]);
+        }
       }
     );
 
@@ -138,5 +122,5 @@ export function usePushNotifications() {
       notificationListener.current?.remove();
       responseListener.current?.remove();
     };
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn, registerToken, unregisterToken, router]);
 }

@@ -17,7 +17,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { setBaseUrl } from "@workspace/api-client-react";
 import { HouseholdStoreProvider } from "@/context/householdStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
@@ -30,7 +29,6 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  usePushNotifications();
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
