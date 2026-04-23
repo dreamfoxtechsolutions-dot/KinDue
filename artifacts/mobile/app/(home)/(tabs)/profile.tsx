@@ -33,6 +33,23 @@ function errMsg(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffDays < 30) return `${diffWeeks} week${diffWeeks === 1 ? "" : "s"} ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+}
+
 function RoleBadge({ role }: { role: string }) {
   const colors = useColors();
   const roleColors: Record<string, string> = {
@@ -1196,9 +1213,14 @@ export default function ProfileScreen() {
                           </Text>
                         ) : null}
                         {m.inviteStatus === "pending" && (
-                          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.warning, marginTop: 1 }}>
-                            Invite pending
-                          </Text>
+                          <>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.warning, marginTop: 1 }}>
+                              Invite pending
+                            </Text>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 1 }}>
+                              Invited {formatRelativeTime(m.createdAt)}
+                            </Text>
+                          </>
                         )}
                       </View>
                       <RoleBadge role={m.role} />
