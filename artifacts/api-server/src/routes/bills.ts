@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, billsTable, receiptsTable } from "@workspace/db";
+import { db, billsTable, receiptsTable, householdMembersTable } from "@workspace/db";
 import { and, eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getMemberRole, canApprove, requiresReceiptForPayment } from "../lib/memberGuard";
 import { logAudit } from "../lib/audit";
+import { sendPushToUsers } from "../lib/push";
 
 const router = Router();
 
@@ -214,6 +215,17 @@ router.post("/households/:householdId/bills/:billId/approve", requireAuth, async
     details: `Approved bill "${updated.name}"`,
   });
 
+  if (updated.createdByUserId && updated.createdByUserId !== user.id) {
+    await sendPushToUsers(
+      [updated.createdByUserId],
+      {
+        title: "Bill Approved",
+        body: `"${updated.name}" has been approved.`,
+        data: { billId: updated.id },
+      }
+    );
+  }
+
   res.json({ ...updated, amount: parseFloat(updated.amount) });
 });
 
@@ -244,6 +256,17 @@ router.post("/households/:householdId/bills/:billId/reject", requireAuth, async 
     entityId: billId,
     details: `Rejected bill "${updated.name}": ${reason ?? "no reason"}`,
   });
+
+  if (updated.createdByUserId && updated.createdByUserId !== user.id) {
+    const body = reason
+      ? `"${updated.name}" was rejected: ${reason}`
+      : `"${updated.name}" has been rejected.`;
+    await sendPushToUsers([updated.createdByUserId], {
+      title: "Bill Rejected",
+      body,
+      data: { billId: updated.id },
+    });
+  }
 
   res.json({ ...updated, amount: parseFloat(updated.amount) });
 });
@@ -307,6 +330,22 @@ router.post("/households/:householdId/bills/:billId/mark-paid", requireAuth, asy
     entityId: billId,
     details: `Marked bill "${updated.name}" as paid`,
   });
+
+  const primaryAndTrusteeMembers = await db.query.householdMembersTable.findMany({
+    where: eq(householdMembersTable.householdId, householdId),
+  });
+
+  const notifyUserIds = primaryAndTrusteeMembers
+    .filter((m) => (m.role === "primary_user" || m.role === "trustee") && m.userId !== user.id)
+    .map((m) => m.userId);
+
+  if (notifyUserIds.length > 0) {
+    await sendPushToUsers(notifyUserIds, {
+      title: "Bill Paid",
+      body: `"${updated.name}" has been marked as paid.`,
+      data: { billId: updated.id },
+    });
+  }
 
   res.json({ ...updated, amount: parseFloat(updated.amount) });
 });
