@@ -528,7 +528,7 @@ export default function ProfileScreen() {
     (m: HouseholdMember) => m.userId === meData?.id
   );
   const role = myMember?.role ?? "other";
-  const canManageMembers = role === "primary_user" || role === "trustee";
+  const canManageMembers = role === "primary_user";
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90;
