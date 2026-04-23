@@ -41,7 +41,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
       try {
         await db.insert(notificationSettingsTable).values({ userId: upserted.id });
-      } catch {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("duplicate key") && !msg.includes("unique constraint")) {
+          req.log?.warn({ err }, "Unexpected error inserting notification settings");
+        }
       }
 
       user = upserted;

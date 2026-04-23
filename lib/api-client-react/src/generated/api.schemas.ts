@@ -356,6 +356,10 @@ export interface RejectBillBody {
 
 export interface MarkBillPaidBody {
   paidDate?: string;
+  receiptStorageKey?: string;
+  receiptFileName?: string;
+  receiptMimeType?: string;
+  receiptFileSize?: number;
 }
 
 export interface TriageSummary {

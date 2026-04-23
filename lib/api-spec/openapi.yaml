@@ -1284,6 +1284,15 @@ components:
         paidDate:
           type: string
           format: date-time
+        receiptStorageKey:
+          type: string
+          description: Object storage path for the receipt (required for CG/Other roles)
+        receiptFileName:
+          type: string
+        receiptMimeType:
+          type: string
+        receiptFileSize:
+          type: integer
 
     RiskFlag:
       type: object

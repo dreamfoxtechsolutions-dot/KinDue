@@ -11,10 +11,12 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
 import {
@@ -119,12 +121,21 @@ export default function BillDetailScreen() {
   const [rejectReason, setRejectReason] = useState("");
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [paidDate, setPaidDate] = useState("");
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [receiptKey, setReceiptKey] = useState<string | null>(null);
+  const [receiptFileName, setReceiptFileName] = useState<string | null>(null);
+  const [receiptMimeType, setReceiptMimeType] = useState<string | null>(null);
+  const [receiptFileSize, setReceiptFileSize] = useState<number | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  const requiresReceipt = role === "caregiver" || role === "other";
 
   const isBusy =
     approveMutation.isPending ||
     rejectMutation.isPending ||
     markPaidMutation.isPending ||
-    deleteMutation.isPending;
+    deleteMutation.isPending ||
+    uploadingReceipt;
 
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0) + 24;
 
@@ -155,16 +166,78 @@ export default function BillDetailScreen() {
     }
   };
 
+  const handlePickReceipt = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow photo library access to attach a receipt.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      quality: 0.8,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingReceipt(true);
+    try {
+      const baseUrl = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
+      const name = asset.fileName ?? `receipt_${Date.now()}.jpg`;
+      const contentType = asset.mimeType ?? "image/jpeg";
+      const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, size: asset.fileSize ?? 0, contentType }),
+      });
+      if (!urlRes.ok) throw new Error("Could not get upload URL");
+      const { uploadURL, objectPath } = (await urlRes.json()) as { uploadURL: string; objectPath: string };
+
+      const imageBlob = await fetch(asset.uri).then((r) => r.blob());
+      const putRes = await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: imageBlob,
+      });
+      if (!putRes.ok) throw new Error("Upload failed");
+
+      setReceiptUri(asset.uri);
+      setReceiptKey(objectPath);
+      setReceiptFileName(name);
+      setReceiptMimeType(contentType);
+      setReceiptFileSize(asset.fileSize ?? 0);
+    } catch (e: unknown) {
+      Alert.alert("Upload failed", errMsg(e, "Could not upload receipt. Please try again."));
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
+
   const handleMarkPaid = async () => {
     if (!activeId || !billId) return;
+    if (requiresReceipt && !receiptKey) {
+      Alert.alert("Receipt required", "As a caregiver, you must attach a receipt photo before marking this bill as paid.");
+      return;
+    }
     try {
       await markPaidMutation.mutateAsync({
         householdId: activeId,
         billId,
-        data: { paidDate: paidDate || undefined },
+        data: {
+          paidDate: paidDate || undefined,
+          receiptStorageKey: receiptKey ?? undefined,
+          receiptFileName: receiptFileName ?? undefined,
+          receiptMimeType: receiptMimeType ?? undefined,
+          receiptFileSize: receiptFileSize ?? undefined,
+        },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowMarkPaidModal(false);
+      setReceiptUri(null);
+      setReceiptKey(null);
+      setReceiptFileName(null);
+      setReceiptMimeType(null);
+      setReceiptFileSize(null);
       refetch();
     } catch (e: unknown) {
       Alert.alert("Error", errMsg(e, "Could not mark bill as paid."));
@@ -523,10 +596,46 @@ export default function BillDetailScreen() {
               value={paidDate}
               onChangeText={setPaidDate}
             />
+            {requiresReceipt && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.warning, marginBottom: 6 }}>
+                  Receipt required for caregivers
+                </Text>
+                {receiptUri ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Image
+                      source={{ uri: receiptUri }}
+                      style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: colors.border }}
+                    />
+                    <Text style={{ flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground }} numberOfLines={2}>
+                      {receiptFileName}
+                    </Text>
+                    <TouchableOpacity onPress={() => { setReceiptUri(null); setReceiptKey(null); setReceiptFileName(null); }}>
+                      <Feather name="x" size={18} color={colors.destructive} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.muted, borderRadius: colors.radius, padding: 12, opacity: uploadingReceipt ? 0.6 : 1 }}
+                    onPress={handlePickReceipt}
+                    disabled={uploadingReceipt}
+                  >
+                    {uploadingReceipt ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Feather name="camera" size={18} color={colors.primary} />
+                    )}
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_500Medium", color: colors.primary }}>
+                      {uploadingReceipt ? "Uploading…" : "Attach Receipt Photo"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             <TouchableOpacity
-              style={[s.modalPrimaryBtn, markPaidMutation.isPending && { opacity: 0.6 }]}
+              style={[s.modalPrimaryBtn, isBusy && { opacity: 0.6 }]}
               onPress={handleMarkPaid}
-              disabled={markPaidMutation.isPending}
+              disabled={isBusy}
             >
               {markPaidMutation.isPending ? (
                 <ActivityIndicator color="#fff" />

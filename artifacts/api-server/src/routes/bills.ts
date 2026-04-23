@@ -266,11 +266,12 @@ router.post("/households/:householdId/bills/:billId/mark-paid", requireAuth, asy
     return;
   }
 
-  const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize } = req.body as {
+  const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize, paidDate } = req.body as {
     receiptStorageKey?: string;
     receiptFileName?: string;
     receiptMimeType?: string;
     receiptFileSize?: number;
+    paidDate?: string;
   };
 
   if (requiresReceiptForPayment(role) && !receiptStorageKey) {
@@ -289,9 +290,11 @@ router.post("/households/:householdId/bills/:billId/mark-paid", requireAuth, asy
     });
   }
 
+  const resolvedPaidAt = paidDate ? new Date(paidDate) : new Date();
+
   const [updated] = await db
     .update(billsTable)
-    .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+    .set({ status: "paid", paidAt: resolvedPaidAt, updatedAt: new Date() })
     .where(eq(billsTable.id, billId))
     .returning();
 
