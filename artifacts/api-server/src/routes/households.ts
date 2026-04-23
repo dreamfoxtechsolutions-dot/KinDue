@@ -185,7 +185,8 @@ router.get("/households/:householdId/dashboard", requireAuth, async (req, res) =
         score = 10 + amount / 100;
         reason = "Upcoming bill";
       }
-      return { bill: { ...b, amount } as unknown as Record<string, unknown>, score, reason };
+      const typedBill = { ...b, amount } as Omit<typeof b, "amount"> & { amount: number };
+      return { bill: typedBill, score, reason };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
