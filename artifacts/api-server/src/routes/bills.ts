@@ -248,7 +248,7 @@ router.post("/households/:householdId/bills/:billId/reject", requireAuth, async 
   res.json({ ...updated, amount: parseFloat(updated.amount) });
 });
 
-router.post("/households/:householdId/bills/:billId/pay", requireAuth, async (req, res) => {
+router.post("/households/:householdId/bills/:billId/mark-paid", requireAuth, async (req, res) => {
   const householdId = parseInt(String(req.params["householdId"]));
   const billId = parseInt(String(req.params["billId"]));
   const user = req.dbUser!;

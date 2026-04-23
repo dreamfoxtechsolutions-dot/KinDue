@@ -21,13 +21,13 @@ async function registerPushToken(token: string, getToken: () => Promise<string |
   const authToken = await getToken();
   if (!authToken) return;
   try {
-    await fetch(`${baseUrl}/api/auth/me/push-tokens`, {
+    await fetch(`${baseUrl}/api/me/push-tokens`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, platform: Platform.OS }),
     });
   } catch {
     console.warn("[push] Failed to register push token");
@@ -41,7 +41,7 @@ async function unregisterPushToken(token: string, getToken: () => Promise<string
   const authToken = await getToken();
   if (!authToken) return;
   try {
-    await fetch(`${baseUrl}/api/auth/me/push-tokens/${encodeURIComponent(token)}`, {
+    await fetch(`${baseUrl}/api/me/push-tokens/${encodeURIComponent(token)}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${authToken}`,

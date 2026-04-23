@@ -154,7 +154,7 @@ router.get("/households/:householdId/dashboard", requireAuth, async (req, res) =
   const totalMonthlyBills = bills.filter((b) => b.status !== "paid" && b.status !== "rejected").length;
   const totalAmount = bills.filter((b) => b.status !== "paid" && b.status !== "rejected").reduce((sum, b) => sum + parseFloat(b.amount), 0);
 
-  const recentAudit = await db.query.auditLogTable.findMany({
+  const recentActivity = await db.query.auditLogTable.findMany({
     where: eq(auditLogTable.householdId, householdId),
     orderBy: (t, { desc }) => [desc(t.createdAt)],
     limit: 5,
@@ -166,6 +166,36 @@ router.get("/households/:householdId/dashboard", requireAuth, async (req, res) =
 
   const riskScore = Math.min(100, overdueCount * 30 + dueSoonCount * 10 + pendingApprovalCount * 5);
 
+  const triageCandidates = bills
+    .filter((b) => b.status === "overdue" || b.status === "pending_approval" || b.status === "approved")
+    .map((b) => {
+      const amount = parseFloat(b.amount);
+      let score = 0;
+      let reason = "";
+      if (b.status === "overdue") {
+        score = 100 + amount / 100;
+        reason = "Overdue — immediate attention needed";
+      } else if (b.status === "pending_approval") {
+        score = 60 + amount / 100;
+        reason = "Awaiting approval";
+      } else if (b.status === "approved" && new Date(b.dueDate) <= sevenDays) {
+        score = 40 + amount / 100;
+        reason = "Due within 7 days";
+      } else {
+        score = 10 + amount / 100;
+        reason = "Upcoming bill";
+      }
+      return { bill: { ...b, amount } as unknown as Record<string, unknown>, score, reason };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((item, idx) => ({
+      bill: item.bill,
+      priorityScore: Math.round(item.score),
+      priorityReason: item.reason,
+      rank: idx + 1,
+    }));
+
   res.json({
     householdId,
     householdName: household.name,
@@ -174,10 +204,12 @@ router.get("/households/:householdId/dashboard", requireAuth, async (req, res) =
     dueSoonCount,
     pendingApprovalCount,
     totalMonthlyBills,
-    totalMonthlyAmount: totalAmount,
+    totalMonthlyEstimate: totalAmount,
+    hasLowBalanceRisk: false,
+    topTriageItems: triageCandidates,
     memberCount: members.length,
     riskScore,
-    recentAudit,
+    recentActivity,
     userRole: role,
   });
 });
