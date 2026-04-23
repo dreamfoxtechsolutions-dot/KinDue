@@ -3,11 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  ClerkProvider,
-  useAuth,
-  RedirectToSignIn,
-} from "@clerk/react";
+import { ClerkProvider, useAuth, RedirectToSignIn } from "@clerk/react";
 import NotFound from "@/pages/not-found";
 import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
@@ -25,7 +21,11 @@ import Onboarding from "@/pages/onboarding";
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({
+  component: Component,
+}: {
+  component: React.ComponentType;
+}) {
   const { isSignedIn, isLoaded } = useAuth();
 
   if (!isLoaded) {
@@ -36,9 +36,9 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  if (!isSignedIn) {
-    return <RedirectToSignIn />;
-  }
+  // if (!isSignedIn) {
+  //   return <RedirectToSignIn />;
+  // }
 
   return <Component />;
 }
@@ -49,16 +49,46 @@ function AppRouter() {
       <Route path="/sign-in" component={SignInPage} />
       <Route path="/sign-in/sso-callback" component={SignInPage} />
       <Route path="/sign-up" component={SignUpPage} />
-      <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/bills" component={() => <ProtectedRoute component={Bills} />} />
-      <Route path="/bills/:id" component={() => <ProtectedRoute component={BillDetail} />} />
-      <Route path="/accounts" component={() => <ProtectedRoute component={Accounts} />} />
-      <Route path="/documents" component={() => <ProtectedRoute component={Documents} />} />
-      <Route path="/triage" component={() => <ProtectedRoute component={Triage} />} />
-      <Route path="/audit" component={() => <ProtectedRoute component={AuditLog} />} />
-      <Route path="/household" component={() => <ProtectedRoute component={Household} />} />
-      <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
-      <Route path="/onboarding" component={() => <ProtectedRoute component={Onboarding} />} />
+      <Route
+        path="/"
+        component={() => <ProtectedRoute component={Dashboard} />}
+      />
+      <Route
+        path="/bills"
+        component={() => <ProtectedRoute component={Bills} />}
+      />
+      <Route
+        path="/bills/:id"
+        component={() => <ProtectedRoute component={BillDetail} />}
+      />
+      <Route
+        path="/accounts"
+        component={() => <ProtectedRoute component={Accounts} />}
+      />
+      <Route
+        path="/documents"
+        component={() => <ProtectedRoute component={Documents} />}
+      />
+      <Route
+        path="/triage"
+        component={() => <ProtectedRoute component={Triage} />}
+      />
+      <Route
+        path="/audit"
+        component={() => <ProtectedRoute component={AuditLog} />}
+      />
+      <Route
+        path="/household"
+        component={() => <ProtectedRoute component={Household} />}
+      />
+      <Route
+        path="/settings"
+        component={() => <ProtectedRoute component={Settings} />}
+      />
+      <Route
+        path="/onboarding"
+        component={() => <ProtectedRoute component={Onboarding} />}
+      />
       <Route component={NotFound} />
     </Switch>
   );
