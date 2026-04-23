@@ -94,7 +94,7 @@ router.get("/households/mine", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json(membership.household);
+  res.json({ ...membership.household, myRole: membership.role });
 });
 
 router.get("/households/mine/members", requireAuth, async (req, res) => {
