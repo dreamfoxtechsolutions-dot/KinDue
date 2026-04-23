@@ -40,6 +40,8 @@ export default function BillDetail() {
   const { user } = useUser();
   const [showPayment, setShowPayment] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const { data: bill, isLoading } = useQuery({
     queryKey: ["bills", billId],
@@ -64,10 +66,12 @@ export default function BillDetail() {
   });
 
   const rejectBill = useMutation({
-    mutationFn: () => api.post(`/bills/${billId}/reject`),
+    mutationFn: (reason: string) => api.post(`/bills/${billId}/reject`, { reason }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bills"] });
       toast({ title: "Bill rejected" });
+      setShowRejectDialog(false);
+      setRejectReason("");
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
@@ -130,8 +134,7 @@ export default function BillDetail() {
                     size="sm"
                     variant="outline"
                     className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                    onClick={() => rejectBill.mutate()}
-                    disabled={rejectBill.isPending}
+                    onClick={() => setShowRejectDialog(true)}
                   >
                     <XCircle size={14} className="mr-1" /> Reject
                   </Button>
@@ -164,6 +167,9 @@ export default function BillDetail() {
                 {bill.due_date && <DetailRow icon={<Calendar size={15} />} label="Due Date" value={new Date(bill.due_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} />}
                 {bill.frequency && <DetailRow icon={<Clock size={15} />} label="Frequency" value={formatLabel(bill.frequency)} />}
                 {bill.notes && <DetailRow icon={<FileText size={15} />} label="Notes" value={bill.notes} />}
+                {bill.rejectionReason && (
+                  <DetailRow icon={<XCircle size={15} className="text-destructive" />} label="Rejection Reason" value={bill.rejectionReason} />
+                )}
               </CardContent>
             </Card>
 
@@ -294,6 +300,39 @@ export default function BillDetail() {
             <Button variant="outline" onClick={() => setShowApproveConfirm(false)}>Cancel</Button>
             <Button onClick={() => approveBill.mutate()} disabled={approveBill.isPending}>
               {approveBill.isPending ? "Approving..." : "Approve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={(open) => { setShowRejectDialog(open); if (!open) setRejectReason(""); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reject Bill?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-2">
+            Provide a reason for rejecting "{bill.title}".
+          </p>
+          <div>
+            <Label htmlFor="reject-reason">Reason</Label>
+            <Textarea
+              id="reject-reason"
+              placeholder="Enter a reason (optional)..."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={3}
+              className="mt-1"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowRejectDialog(false); setRejectReason(""); }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => rejectBill.mutate(rejectReason)}
+              disabled={rejectBill.isPending}
+            >
+              {rejectBill.isPending ? "Rejecting..." : "Reject Bill"}
             </Button>
           </DialogFooter>
         </DialogContent>
