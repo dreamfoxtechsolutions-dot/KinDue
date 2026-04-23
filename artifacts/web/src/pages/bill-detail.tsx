@@ -143,7 +143,7 @@ export default function BillDetail() {
                   </Button>
                 </>
               )}
-              {bill.status === "approved" && (
+              {(bill.status === "approved" || (bill.status === "paid" && remaining > 0)) && (
                 <Button size="sm" onClick={() => setShowPayment(true)}>
                   <DollarSign size={14} className="mr-1" /> Record Payment
                 </Button>
@@ -171,7 +171,7 @@ export default function BillDetail() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base">Payment History</CardTitle>
-                {bill.status === "approved" && (
+                {(bill.status === "approved" || (bill.status === "paid" && remaining > 0)) && (
                   <Button size="sm" variant="outline" onClick={() => setShowPayment(true)}>
                     <Upload size={14} className="mr-1" /> Record
                   </Button>

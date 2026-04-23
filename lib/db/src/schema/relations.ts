@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { usersTable, notificationSettingsTable, pushTokensTable } from "./users";
 import { householdsTable, householdMembersTable } from "./households";
-import { billsTable, documentsTable, receiptsTable } from "./bills";
+import { billsTable, documentsTable, receiptsTable, paymentsTable } from "./bills";
 import { gmailConnectionsTable, gmailBillCandidatesTable } from "./gmail";
 import { linkedAccountsTable, transactionsTable } from "./plaid";
 import { auditLogTable } from "./audit";
@@ -43,6 +43,12 @@ export const billsRelations = relations(billsTable, ({ one, many }) => ({
   approvedBy: one(usersTable, { fields: [billsTable.approvedByUserId], references: [usersTable.id], relationName: "billApprover" }),
   documents: many(documentsTable),
   receipts: many(receiptsTable),
+  payments: many(paymentsTable),
+}));
+
+export const paymentsRelations = relations(paymentsTable, ({ one }) => ({
+  bill: one(billsTable, { fields: [paymentsTable.billId], references: [billsTable.id] }),
+  paidBy: one(usersTable, { fields: [paymentsTable.paidByUserId], references: [usersTable.id] }),
 }));
 
 export const documentsRelations = relations(documentsTable, ({ one }) => ({

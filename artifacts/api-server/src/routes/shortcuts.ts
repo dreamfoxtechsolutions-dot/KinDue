@@ -6,8 +6,9 @@ import {
   auditLogTable,
   documentsTable,
   receiptsTable,
+  paymentsTable,
 } from "@workspace/db";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sum } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getMemberRole,
@@ -416,35 +417,30 @@ router.get("/bills/:billId/payments", requireAuth, async (req, res) => {
     return;
   }
 
-  const receipts = await db.query.receiptsTable.findMany({
-    where: eq(receiptsTable.billId, billId),
-    orderBy: [desc(receiptsTable.createdAt)],
+  const records = await db.query.paymentsTable.findMany({
+    where: eq(paymentsTable.billId, billId),
+    orderBy: [desc(paymentsTable.paidAt)],
   });
 
-  const payments: Array<{
-    id: number;
-    billId: number;
-    amount: number;
-    paidAt: Date | null;
-    fileName: string | null;
-    storageKey: string | null;
-  }> = receipts.map((r) => ({
-    id: r.id,
-    billId: r.billId,
-    amount: parseFloat(bill.amount),
-    paidAt: r.createdAt,
-    fileName: r.fileName,
-    storageKey: r.storageKey,
+  const payments = records.map((p) => ({
+    id: p.id,
+    bill_id: p.billId,
+    amount: parseFloat(p.amount),
+    paid_at: p.paidAt,
+    method: p.method,
+    notes: p.notes,
+    created_at: p.createdAt,
   }));
 
-  if (bill.paidAt && receipts.length === 0) {
+  if (bill.paidAt && records.length === 0) {
     payments.push({
       id: 0,
-      billId: bill.id,
+      bill_id: bill.id,
       amount: parseFloat(bill.amount),
-      paidAt: bill.paidAt,
-      fileName: null,
-      storageKey: null,
+      paid_at: bill.paidAt,
+      method: "bank_transfer",
+      notes: null,
+      created_at: bill.paidAt,
     });
   }
 
@@ -478,13 +474,25 @@ router.post("/bills/:billId/payments", requireAuth, async (req, res) => {
     return;
   }
 
-  const { receiptStorageKey, receiptFileName, receiptMimeType, receiptFileSize } =
-    req.body as {
-      receiptStorageKey?: string;
-      receiptFileName?: string;
-      receiptMimeType?: string;
-      receiptFileSize?: number;
-    };
+  const {
+    amount,
+    paid_at,
+    method,
+    notes,
+    receiptStorageKey,
+    receiptFileName,
+    receiptMimeType,
+    receiptFileSize,
+  } = req.body as {
+    amount?: number;
+    paid_at?: string;
+    method?: string;
+    notes?: string;
+    receiptStorageKey?: string;
+    receiptFileName?: string;
+    receiptMimeType?: string;
+    receiptFileSize?: number;
+  };
 
   if (requiresReceiptForPayment(role) && !receiptStorageKey) {
     res.status(400).json({
@@ -492,6 +500,29 @@ router.post("/bills/:billId/payments", requireAuth, async (req, res) => {
     });
     return;
   }
+
+  const paymentAmount = amount != null ? Number(amount) : parseFloat(bill.amount);
+  if (isNaN(paymentAmount) || paymentAmount <= 0) {
+    res.status(400).json({ error: "amount must be a positive number" });
+    return;
+  }
+
+  const paymentDate = paid_at ? new Date(paid_at) : new Date();
+  if (isNaN(paymentDate.getTime())) {
+    res.status(400).json({ error: "paid_at must be a valid date" });
+    return;
+  }
+
+  const paymentMethod = method ?? "bank_transfer";
+
+  await db.insert(paymentsTable).values({
+    billId,
+    amount: String(paymentAmount),
+    paidAt: paymentDate,
+    method: paymentMethod,
+    notes: notes ?? null,
+    paidByUserId: user.id,
+  });
 
   if (receiptStorageKey) {
     await db.insert(receiptsTable).values({
@@ -504,9 +535,21 @@ router.post("/bills/:billId/payments", requireAuth, async (req, res) => {
     });
   }
 
+  const [totalResult] = await db
+    .select({ total: sum(paymentsTable.amount) })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.billId, billId));
+
+  const totalPaid = parseFloat(totalResult?.total ?? "0");
+  const billAmount = parseFloat(bill.amount);
+  const isFullyPaid = totalPaid >= billAmount;
+
+  const newStatus = isFullyPaid ? "paid" : bill.status;
+  const newPaidAt = isFullyPaid ? paymentDate : bill.paidAt;
+
   const [updated] = await db
     .update(billsTable)
-    .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+    .set({ status: newStatus, paidAt: newPaidAt, updatedAt: new Date() })
     .where(eq(billsTable.id, billId))
     .returning();
 
@@ -514,10 +557,10 @@ router.post("/bills/:billId/payments", requireAuth, async (req, res) => {
     householdId,
     actorUserId: user.id,
     actorName: user.displayName,
-    action: "bill.paid",
+    action: isFullyPaid ? "bill.paid" : "bill.partial_payment",
     entityType: "bill",
     entityId: billId,
-    details: `Marked bill "${updated.name}" as paid`,
+    details: `Recorded payment of $${paymentAmount.toFixed(2)} for bill "${updated.name}" (total paid: $${totalPaid.toFixed(2)} of $${billAmount.toFixed(2)})`,
   });
 
   res.json(normalizeBill({ ...updated, amount: parseFloat(updated.amount) }));

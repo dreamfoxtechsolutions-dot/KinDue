@@ -51,7 +51,19 @@ export const receiptsTable = pgTable("receipts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const paymentsTable = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  billId: integer("bill_id").notNull().references(() => billsTable.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  paidAt: timestamp("paid_at").notNull(),
+  method: text("method").notNull().default("bank_transfer"),
+  notes: text("notes"),
+  paidByUserId: integer("paid_by_user_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type InsertBill = typeof billsTable.$inferInsert;
 export type Bill = typeof billsTable.$inferSelect;
 export type Document = typeof documentsTable.$inferSelect;
 export type Receipt = typeof receiptsTable.$inferSelect;
+export type Payment = typeof paymentsTable.$inferSelect;
