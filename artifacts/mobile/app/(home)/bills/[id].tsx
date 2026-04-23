@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
 import {
@@ -96,6 +97,7 @@ export default function BillDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { getToken } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const billId = Number(id);
   const { householdId } = useHouseholdStore();
@@ -185,9 +187,13 @@ export default function BillDetailScreen() {
       const baseUrl = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
       const name = asset.fileName ?? `receipt_${Date.now()}.jpg`;
       const contentType = asset.mimeType ?? "image/jpeg";
+      const authToken = await getToken();
       const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ name, size: asset.fileSize ?? 0, contentType }),
       });
       if (!urlRes.ok) throw new Error("Could not get upload URL");
