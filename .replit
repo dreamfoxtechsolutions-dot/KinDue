@@ -49,11 +49,11 @@ externalPort = 80
 
 [[ports]]
 localPort = 8082
-externalPort = 3003
+externalPort = 3002
 
 [[ports]]
 localPort = 18115
-externalPort = 4200
+externalPort = 3001
 
 [[ports]]
 localPort = 22333

@@ -53,6 +53,7 @@ export default function SignUpScreen() {
 
   const onGooglePress = useCallback(async () => {
     try {
+      await WebBrowser.dismissBrowser();
       const { createdSessionId, setActive } = await startSSOFlow({
         strategy: "oauth_google",
         redirectUrl: AuthSession.makeRedirectUri(),
