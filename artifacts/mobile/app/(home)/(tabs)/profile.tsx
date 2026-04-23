@@ -23,8 +23,10 @@ import {
   useListHouseholdMembers,
   useGetMe,
   useInviteHouseholdMember,
+  useUpdateHouseholdMember,
+  useRemoveHouseholdMember,
 } from "@workspace/api-client-react";
-import { InviteMemberBodyRole } from "@workspace/api-client-react";
+import { InviteMemberBodyRole, UpdateMemberBodyRole } from "@workspace/api-client-react";
 import type { HouseholdMember } from "@workspace/api-client-react";
 
 function errMsg(e: unknown, fallback: string): string {
@@ -511,6 +513,297 @@ function InviteMemberModal({
   );
 }
 
+const UPDATE_ROLES: { value: UpdateMemberBodyRole; label: string; description: string }[] = [
+  { value: "trustee", label: "Trustee", description: "Can approve and manage bills" },
+  { value: "caregiver", label: "Caregiver", description: "Can mark bills paid (receipt required)" },
+  { value: "other", label: "Other", description: "Read-only access to bills" },
+];
+
+function MemberActionsSheet({
+  visible,
+  member,
+  householdId,
+  canChangeRole,
+  onClose,
+  onSuccess,
+  memberDisplayName,
+}: {
+  visible: boolean;
+  member: HouseholdMember | null;
+  householdId: number;
+  canChangeRole: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  memberDisplayName: (m: HouseholdMember) => string;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const updateMutation = useUpdateHouseholdMember();
+  const removeMutation = useRemoveHouseholdMember();
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<UpdateMemberBodyRole>("caregiver");
+
+  React.useEffect(() => {
+    if (member) {
+      const r = member.role as UpdateMemberBodyRole;
+      if (r === "trustee" || r === "caregiver" || r === "other") {
+        setSelectedRole(r);
+      } else {
+        setSelectedRole("caregiver");
+      }
+    }
+    setShowRolePicker(false);
+  }, [member]);
+
+  const handleChangeRole = async () => {
+    if (!member) return;
+    try {
+      await updateMutation.mutateAsync({
+        householdId,
+        memberId: member.id,
+        data: { role: selectedRole, sensitiveToken: "" },
+      });
+      onSuccess();
+      onClose();
+      const roleLabel = UPDATE_ROLES.find((r) => r.value === selectedRole)?.label ?? selectedRole;
+      Alert.alert("Role updated", `${memberDisplayName(member)}'s role has been changed to ${roleLabel}.`);
+    } catch (e: unknown) {
+      Alert.alert("Could not update role", errMsg(e, "Please try again."));
+    }
+  };
+
+  const handleRemove = () => {
+    if (!member) return;
+    Alert.alert(
+      "Remove Member",
+      `Are you sure you want to remove ${memberDisplayName(member)} from the household?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeMutation.mutateAsync({ householdId, memberId: member.id });
+              onSuccess();
+              onClose();
+              Alert.alert("Member removed", `${memberDisplayName(member)} has been removed from the household.`);
+            } catch (e: unknown) {
+              Alert.alert("Could not remove member", errMsg(e, "Please try again."));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const s = StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+    sheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: insets.bottom + 24,
+    },
+    handle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    memberName: {
+      fontSize: 16,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    memberRole: {
+      fontSize: 13,
+      fontFamily: "Inter_400Regular",
+      color: colors.mutedForeground,
+      textAlign: "center",
+      marginBottom: 20,
+    },
+    actionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+      gap: 14,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    actionLabel: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.foreground,
+    },
+    actionLabelDanger: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.destructive,
+    },
+    cancelBtn: {
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    cancelText: {
+      fontSize: 15,
+      fontFamily: "Inter_400Regular",
+      color: colors.mutedForeground,
+    },
+    roleRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 16,
+    },
+    roleChip: {
+      flex: 1,
+      borderWidth: 1.5,
+      borderRadius: colors.radius,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    roleChipLabel: {
+      fontSize: 12,
+      fontFamily: "Inter_600SemiBold",
+    },
+    saveBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: colors.radius,
+      paddingVertical: 13,
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    saveBtnText: {
+      fontSize: 15,
+      fontFamily: "Inter_600SemiBold",
+      color: "#ffffff",
+    },
+    backBtn: {
+      paddingVertical: 13,
+      alignItems: "center",
+    },
+    backText: {
+      fontSize: 14,
+      fontFamily: "Inter_400Regular",
+      color: colors.mutedForeground,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontFamily: "Inter_600SemiBold",
+      color: colors.foreground,
+      marginBottom: 12,
+    },
+  });
+
+  if (!member) return null;
+
+  const displayName = memberDisplayName(member);
+  const roleLabels: Record<string, string> = {
+    primary_user: "Primary User",
+    trustee: "Trustee",
+    caregiver: "Caregiver",
+    other: "Other",
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.memberName} numberOfLines={1}>{displayName}</Text>
+            <Text style={s.memberRole}>{roleLabels[member.role] ?? member.role}</Text>
+
+            {showRolePicker ? (
+              <>
+                <Text style={s.sectionTitle}>Select New Role</Text>
+                <View style={s.roleRow}>
+                  {UPDATE_ROLES.map((r) => {
+                    const isSelected = selectedRole === r.value;
+                    return (
+                      <TouchableOpacity
+                        key={r.value}
+                        style={[
+                          s.roleChip,
+                          {
+                            borderColor: isSelected ? colors.primary : colors.border,
+                            backgroundColor: isSelected ? colors.primary + "14" : colors.background,
+                          },
+                        ]}
+                        onPress={() => setSelectedRole(r.value)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            s.roleChipLabel,
+                            { color: isSelected ? colors.primary : colors.foreground },
+                          ]}
+                        >
+                          {r.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity
+                  style={[s.saveBtn, updateMutation.isPending && { opacity: 0.7 }]}
+                  onPress={handleChangeRole}
+                  disabled={updateMutation.isPending}
+                  activeOpacity={0.85}
+                >
+                  {updateMutation.isPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.saveBtnText}>Save Role</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={s.backBtn} onPress={() => setShowRolePicker(false)}>
+                  <Text style={s.backText}>Back</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {canChangeRole && (
+                  <TouchableOpacity style={s.actionBtn} onPress={() => setShowRolePicker(true)} activeOpacity={0.7}>
+                    <Feather name="shield" size={20} color={colors.foreground} />
+                    <Text style={s.actionLabel}>Change Role</Text>
+                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={s.actionBtn}
+                  onPress={handleRemove}
+                  disabled={removeMutation.isPending}
+                  activeOpacity={0.7}
+                >
+                  {removeMutation.isPending ? (
+                    <ActivityIndicator size="small" color={colors.destructive} />
+                  ) : (
+                    <Feather name="user-x" size={20} color={colors.destructive} />
+                  )}
+                  <Text style={s.actionLabelDanger}>Remove from Household</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.cancelBtn} onPress={onClose}>
+                  <Text style={s.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -529,6 +822,10 @@ export default function ProfileScreen() {
   );
   const role = myMember?.role ?? "other";
   const canManageMembers = role === "primary_user";
+  const canActOnMembers = role === "primary_user" || role === "trustee";
+  const canChangeRoles = role === "primary_user";
+  const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
+  const [showMemberActions, setShowMemberActions] = useState(false);
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90;
@@ -789,34 +1086,49 @@ export default function ProfileScreen() {
           <View style={s.section}>
             <Text style={s.sectionLabel}>Members</Text>
             <View style={s.sectionCard}>
-              {members?.map((m: HouseholdMember, idx: number) => (
-                <React.Fragment key={m.id}>
-                  {idx > 0 && (
-                    <View style={[s.separator, { marginLeft: 66 }]} />
-                  )}
-                  <View style={s.memberRow}>
-                    <View style={s.memberAvatar}>
-                      <Text style={s.memberAvatarText}>{memberInitials(m)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.memberName} numberOfLines={1}>
-                        {memberDisplayName(m)}
-                      </Text>
-                      {m.user?.firstName && memberEmail(m) ? (
-                        <Text style={s.memberEmail} numberOfLines={1}>
-                          {memberEmail(m)}
+              {members?.map((m: HouseholdMember, idx: number) => {
+                const isSelf = m.userId === meData?.id;
+                const isPrimaryUser = m.role === "primary_user";
+                const canTap = canActOnMembers && !isSelf && !isPrimaryUser;
+                return (
+                  <React.Fragment key={m.id}>
+                    {idx > 0 && (
+                      <View style={[s.separator, { marginLeft: 66 }]} />
+                    )}
+                    <TouchableOpacity
+                      style={s.memberRow}
+                      activeOpacity={canTap ? 0.7 : 1}
+                      onPress={canTap ? () => {
+                        setSelectedMember(m);
+                        setShowMemberActions(true);
+                      } : undefined}
+                    >
+                      <View style={s.memberAvatar}>
+                        <Text style={s.memberAvatarText}>{memberInitials(m)}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.memberName} numberOfLines={1}>
+                          {memberDisplayName(m)}
                         </Text>
-                      ) : null}
-                      {m.inviteStatus === "pending" && (
-                        <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.warning, marginTop: 1 }}>
-                          Invite pending
-                        </Text>
+                        {m.user?.firstName && memberEmail(m) ? (
+                          <Text style={s.memberEmail} numberOfLines={1}>
+                            {memberEmail(m)}
+                          </Text>
+                        ) : null}
+                        {m.inviteStatus === "pending" && (
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.warning, marginTop: 1 }}>
+                            Invite pending
+                          </Text>
+                        )}
+                      </View>
+                      <RoleBadge role={m.role} />
+                      {canTap && (
+                        <Feather name="more-vertical" size={16} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
                       )}
-                    </View>
-                    <RoleBadge role={m.role} />
-                  </View>
-                </React.Fragment>
-              ))}
+                    </TouchableOpacity>
+                  </React.Fragment>
+                );
+              })}
 
               {canManageMembers && (
                 <>
@@ -889,6 +1201,21 @@ export default function ProfileScreen() {
           onClose={() => setShowInviteModal(false)}
           householdId={activeId}
           onSuccess={() => void refetchMembers()}
+        />
+      )}
+
+      {activeId && (
+        <MemberActionsSheet
+          visible={showMemberActions}
+          member={selectedMember}
+          householdId={activeId}
+          canChangeRole={canChangeRoles}
+          onClose={() => {
+            setShowMemberActions(false);
+            setSelectedMember(null);
+          }}
+          onSuccess={() => void refetchMembers()}
+          memberDisplayName={memberDisplayName}
         />
       )}
     </>
