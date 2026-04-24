@@ -12,6 +12,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -29,6 +30,7 @@ import {
   useListHouseholdMembers,
   useGetMe,
   useListHouseholds,
+  useListReceipts,
 } from "@workspace/api-client-react";
 import type { HouseholdMember } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
@@ -57,6 +59,27 @@ function statusColor(
     case "overdue": return colors.destructive;
     default: return colors.mutedForeground;
   }
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function resolveDownloadUrl(storageKey: string, downloadUrl?: string | null): string {
+  if (downloadUrl) return downloadUrl;
+  const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : "";
+  const path = storageKey.replace(/^\/objects\//, "");
+  return `${baseUrl}/api/storage/objects/${path}`;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -107,6 +130,10 @@ export default function BillDetailScreen() {
   const { data: bill, isLoading, refetch } = useGetBill(activeId ?? 0, billId);
   const { data: meData } = useGetMe();
   const { data: members } = useListHouseholdMembers(activeId ?? 0);
+  const { data: receipts, isLoading: receiptsLoading } = useListReceipts(
+    activeId ?? 0,
+    bill?.status === "paid" ? billId : 0
+  );
 
   const myMember = members?.find((m: HouseholdMember) => m.userId === meData?.id);
   const role = myMember?.role ?? "other";
@@ -460,6 +487,101 @@ export default function BillDetailScreen() {
             <InfoRow label="Rejection Reason" value={bill.rejectionReason} />
           )}
         </View>
+
+        {bill.status === "paid" && (
+          <View style={s.infoCard}>
+            <Text style={s.sectionTitle}>Receipts</Text>
+            {receiptsLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+                style={{ marginVertical: 12 }}
+              />
+            ) : !receipts || receipts.length === 0 ? (
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontFamily: "Inter_400Regular",
+                  color: colors.mutedForeground,
+                  paddingVertical: 12,
+                }}
+              >
+                No receipts uploaded for this payment.
+              </Text>
+            ) : (
+              receipts.map((receipt) => {
+                const uploader = members?.find(
+                  (m: HouseholdMember) => m.userId === receipt.uploadedByUserId
+                );
+                const uploaderName = uploader
+                  ? uploader.user
+                    ? [uploader.user.firstName, uploader.user.lastName]
+                        .filter(Boolean)
+                        .join(" ") || uploader.user.email
+                    : (uploader.inviteEmail ?? "Unknown")
+                  : "Unknown";
+                const downloadUrl = resolveDownloadUrl(receipt.storageKey, receipt.downloadUrl);
+                return (
+                  <TouchableOpacity
+                    key={receipt.id}
+                    onPress={async () => {
+                      try {
+                        await Linking.openURL(downloadUrl);
+                      } catch {
+                        Alert.alert("Error", "Could not open the receipt. Please try again.");
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      gap: 12,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 8,
+                        backgroundColor: colors.primary + "18",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Feather name="file-text" size={18} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontFamily: "Inter_500Medium",
+                          color: colors.foreground,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {receipt.fileName}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontFamily: "Inter_400Regular",
+                          color: colors.mutedForeground,
+                          marginTop: 2,
+                        }}
+                      >
+                        {formatDate(receipt.createdAt)} · {uploaderName}
+                      </Text>
+                    </View>
+                    <Feather name="download" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        )}
 
         <View style={s.actionsCard}>
           <Text style={s.sectionTitle}>Actions</Text>
