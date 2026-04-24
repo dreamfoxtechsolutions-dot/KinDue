@@ -19,6 +19,7 @@ import { useHouseholdStore } from "@/context/householdStore";
 import {
   useGetHouseholdDashboard,
   useListHouseholds,
+  getListHouseholdsQueryKey,
 } from "@workspace/api-client-react";
 import type { TriageItem } from "@workspace/api-client-react";
 
@@ -107,7 +108,9 @@ export default function DashboardScreen() {
     data: households,
     isLoading: householdsLoading,
     refetch: refetchHouseholds,
-  } = useListHouseholds();
+  } = useListHouseholds({
+    query: { queryKey: getListHouseholdsQueryKey(), refetchInterval: 60_000, refetchIntervalInBackground: false },
+  });
 
   const firstHousehold = households?.[0];
   const activeId = householdId ?? firstHousehold?.id;

@@ -21,6 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
 import {
   useListHouseholds,
+  getListHouseholdsQueryKey,
   useListHouseholdMembers,
   useGetMe,
   useInviteHouseholdMember,
@@ -907,7 +908,9 @@ export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const { householdId } = useHouseholdStore();
-  const { data: households } = useListHouseholds();
+  const { data: households } = useListHouseholds({
+    query: { queryKey: getListHouseholdsQueryKey(), refetchInterval: 60_000, refetchIntervalInBackground: false },
+  });
   const activeId = householdId ?? households?.[0]?.id;
   const { data: meData } = useGetMe();
   const { data: members, refetch: refetchMembers } = useListHouseholdMembers(activeId ?? 0);

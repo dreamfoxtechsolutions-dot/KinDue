@@ -24,6 +24,7 @@ import {
   useListBills,
   useCreateBill,
   useListHouseholds,
+  getListHouseholdsQueryKey,
   useListHouseholdMembers,
   useGetMe,
   CreateBillBodyCategory,
@@ -194,7 +195,9 @@ export default function BillsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { householdId } = useHouseholdStore();
-  const { data: households } = useListHouseholds();
+  const { data: households } = useListHouseholds({
+    query: { queryKey: getListHouseholdsQueryKey(), refetchInterval: 60_000, refetchIntervalInBackground: false },
+  });
   const activeId = householdId ?? households?.[0]?.id;
 
   const { data: meData } = useGetMe();
