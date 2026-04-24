@@ -32,6 +32,8 @@ async function setupAndroidChannel() {
   }
 }
 
+let coldStartHandled = false;
+
 export function usePushNotifications() {
   const { isSignedIn } = useAuth();
   const router = useRouter();
@@ -116,6 +118,26 @@ export function usePushNotifications() {
         }
       }
     );
+
+    if (!coldStartHandled) {
+      coldStartHandled = true;
+      Notifications.getLastNotificationResponseAsync()
+        .then((response) => {
+          Notifications.clearLastNotificationResponseAsync().catch(() => {
+            console.warn("[push] Failed to clear last notification response");
+          });
+          if (!mounted || !response) return;
+          const data = response.notification.request.content.data as Record<string, unknown>;
+          console.log("[push] Cold-start notification tapped, data:", data);
+          const billId = data?.billId;
+          if (billId !== undefined && billId !== null) {
+            router.push(`/(home)/bills/${String(billId)}` as Parameters<typeof router.push>[0]);
+          }
+        })
+        .catch(() => {
+          console.warn("[push] Failed to read last notification response");
+        });
+    }
 
     return () => {
       mounted = false;
