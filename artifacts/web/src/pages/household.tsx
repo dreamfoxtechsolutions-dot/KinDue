@@ -40,6 +40,8 @@ export default function Household() {
   const { data: household, isLoading: loadingHousehold } = useQuery({
     queryKey: ["household"],
     queryFn: () => api.get("/households/mine"),
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: members = [], isLoading: loadingMembers } = useQuery({
