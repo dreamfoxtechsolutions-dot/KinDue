@@ -46,6 +46,8 @@ export default function Household() {
     queryKey: ["household", "members"],
     queryFn: () => api.get("/households/mine/members"),
     enabled: !!household,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const createHousehold = useMutation({
