@@ -927,9 +927,12 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      const id = setInterval(() => setTick((t) => t + 1), 60_000);
+      const id = setInterval(() => {
+        setTick((t) => t + 1);
+        if (activeId) void refetchMembers();
+      }, 60_000);
       return () => clearInterval(id);
-    }, [])
+    }, [activeId, refetchMembers])
   );
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
