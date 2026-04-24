@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, UserPlus, Shield, Star, Heart, User, Crown, Mail } from "lucide-react";
+import { Users, UserPlus, Shield, Star, Heart, User, Crown, Mail, Clock, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ROLE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -50,6 +50,17 @@ export default function Household() {
     refetchIntervalInBackground: false,
   });
 
+  const isAdmin = household &&
+    (household.myRole === "primary_user" || household.myRole === "trustee");
+
+  const { data: pendingInvites = [], isLoading: loadingInvites } = useQuery({
+    queryKey: ["household", "invites"],
+    queryFn: () => api.get("/households/mine/invites"),
+    enabled: !!household && isAdmin,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
+
   const createHousehold = useMutation({
     mutationFn: (data: any) => api.post("/households", data),
     onSuccess: () => {
@@ -64,8 +75,18 @@ export default function Household() {
     mutationFn: (data: any) => api.post("/households/mine/members/invite", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["household", "members"] });
+      qc.invalidateQueries({ queryKey: ["household", "invites"] });
       setShowInvite(false);
       toast({ title: "Invitation sent!" });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const cancelInvite = useMutation({
+    mutationFn: (memberId: number) => api.delete(`/households/mine/invites/${memberId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["household", "invites"] });
+      toast({ title: "Invite cancelled" });
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
@@ -115,9 +136,11 @@ export default function Household() {
             <h1 className="text-2xl font-bold text-foreground">{household.name}</h1>
             <p className="text-muted-foreground text-sm mt-1">{members.length} member{members.length !== 1 ? "s" : ""}</p>
           </div>
-          <Button onClick={() => setShowInvite(true)} className="gap-2">
-            <UserPlus size={16} /> Invite Member
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setShowInvite(true)} className="gap-2">
+              <UserPlus size={16} /> Invite Member
+            </Button>
+          )}
         </div>
 
         {/* Role legend */}
@@ -169,16 +192,94 @@ export default function Household() {
             })}
           </div>
         )}
+
+        {/* Pending Invites — visible to admins only */}
+        {isAdmin && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Pending Invites
+              </h2>
+              {pendingInvites.length > 0 && (
+                <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-medium">
+                  {pendingInvites.length}
+                </span>
+              )}
+            </div>
+
+            {loadingInvites ? (
+              <div className="text-center py-4 text-muted-foreground text-sm">Loading invites...</div>
+            ) : pendingInvites.length === 0 ? (
+              <Card className="bg-muted/20">
+                <CardContent className="py-6 text-center">
+                  <p className="text-sm text-muted-foreground">No pending invites</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3">
+                {pendingInvites.map((invite: any) => {
+                  const roleInfo = ROLE_LABELS[invite.role] || ROLE_LABELS["other"];
+                  return (
+                    <Card key={invite.id} className="border-dashed border-amber-200 bg-amber-50/40">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                            <Clock size={16} className="text-amber-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-foreground">{invite.email}</p>
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                                Pending
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                              <Clock size={11} /> Invited {formatDate(invite.invitedAt)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${roleInfo.color}`}>
+                              {roleInfo.icon} {roleInfo.label}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                              onClick={() => cancelInvite.mutate(invite.id)}
+                              disabled={cancelInvite.isPending}
+                              title="Cancel invite"
+                            >
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <InviteMemberDialog
-        open={showInvite}
-        onClose={() => setShowInvite(false)}
-        onSubmit={(data) => inviteMember.mutate(data)}
-        loading={inviteMember.isPending}
-      />
+      {isAdmin && (
+        <InviteMemberDialog
+          open={showInvite}
+          onClose={() => setShowInvite(false)}
+          onSubmit={(data) => inviteMember.mutate(data)}
+          loading={inviteMember.isPending}
+        />
+      )}
     </AppShell>
   );
+}
+
+function formatDate(dateStr: string | null | undefined) {
+  if (!dateStr) return "unknown date";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function roleDescription(role: string) {

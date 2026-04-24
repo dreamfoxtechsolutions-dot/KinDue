@@ -8,7 +8,7 @@ import {
   receiptsTable,
   paymentsTable,
 } from "@workspace/db";
-import { and, eq, desc, sum } from "drizzle-orm";
+import { and, eq, desc, sum, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getMemberRole,
@@ -132,6 +132,91 @@ router.get("/households/mine/members", requireAuth, async (req, res) => {
         : null,
     }))
   );
+});
+
+router.get("/households/mine/invites", requireAuth, async (req, res) => {
+  const user = req.dbUser!;
+  const membership = await getUserHousehold(user.id);
+
+  if (!membership) {
+    res.status(404).json({ error: "No household found" });
+    return;
+  }
+
+  const householdId = membership.householdId;
+  const role = await getMemberRole(householdId, user.id);
+  if (!canManageMembers(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const invites = await db.query.householdMembersTable.findMany({
+    where: and(
+      eq(householdMembersTable.householdId, householdId),
+      isNotNull(householdMembersTable.inviteEmail)
+    ),
+    with: { user: true },
+  });
+
+  res.json(
+    invites.map((m) => ({
+      id: m.id,
+      email: m.inviteEmail,
+      role: m.role,
+      invitedAt: m.joinedAt,
+    }))
+  );
+});
+
+router.delete("/households/mine/invites/:memberId", requireAuth, async (req, res) => {
+  const user = req.dbUser!;
+  const memberId = parseInt(String(req.params["memberId"]));
+  if (isNaN(memberId)) {
+    res.status(400).json({ error: "Invalid member ID" });
+    return;
+  }
+  const membership = await getUserHousehold(user.id);
+
+  if (!membership) {
+    res.status(404).json({ error: "No household found" });
+    return;
+  }
+
+  const householdId = membership.householdId;
+  const role = await getMemberRole(householdId, user.id);
+  if (!canManageMembers(role)) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const invite = await db.query.householdMembersTable.findFirst({
+    where: and(
+      eq(householdMembersTable.id, memberId),
+      eq(householdMembersTable.householdId, householdId),
+      isNotNull(householdMembersTable.inviteEmail)
+    ),
+  });
+
+  if (!invite) {
+    res.status(404).json({ error: "Pending invite not found" });
+    return;
+  }
+
+  await db
+    .delete(householdMembersTable)
+    .where(and(eq(householdMembersTable.id, memberId), eq(householdMembersTable.householdId, householdId)));
+
+  await logAudit({
+    householdId,
+    actorUserId: user.id,
+    actorName: user.displayName,
+    action: "member.removed",
+    entityType: "member",
+    entityId: memberId,
+    details: `Cancelled invite for ${invite.inviteEmail ?? "unknown"}`,
+  });
+
+  res.status(204).end();
 });
 
 router.post("/households/mine/members/invite", requireAuth, async (req, res) => {
