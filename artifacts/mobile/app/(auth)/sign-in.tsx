@@ -39,11 +39,12 @@ export default function SignInScreen() {
   const { startSSOFlow } = useSSO();
   const { signIn, fetchStatus } = useSignIn();
 
+  const [otp, setOtp] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState("");
-  const [mode, setMode] = useState<"options" | "email">("options");
+  const [mode, setMode] = useState<"options" | "email" | "otp">("options");
 
   const isLoading = fetchStatus === "fetching";
 
@@ -73,16 +74,68 @@ export default function SignInScreen() {
       setLocalError("Please enter your email and password.");
       return;
     }
+
     setLocalError("");
-    const { error } = await signIn.password({ identifier: email, password });
-    if (error) {
-      setLocalError(error.message || "Sign in failed.");
+
+    try {
+      await signIn.create({
+        identifier: email,
+        password,
+      });
+
+      console.log("status:", signIn.status);
+
+      if (signIn.status === "complete") {
+        await signIn.finalize({
+          navigate: ({ decorateUrl }) =>
+            router.replace(decorateUrl("/") as Href),
+        });
+      } else if (signIn.status === "needs_second_factor") {
+        const emailCodeFactor = signIn.supportedSecondFactors?.find(
+          (factor) => factor.strategy === "email_code",
+        );
+
+        if (emailCodeFactor) {
+          await signIn.mfa.sendEmailCode();
+          setMode("otp");
+        }
+      }
+    } catch (err: any) {
+      const message =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Sign in failed.";
+
+      setLocalError(message);
+    }
+  };
+
+  const onVerifyOtp = async () => {
+    if (!otp) {
+      setLocalError("Enter the verification code.");
       return;
     }
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: ({ decorateUrl }) => router.replace(decorateUrl("/") as Href),
-      });
+
+    setLocalError("");
+
+    try {
+      await signIn.mfa.verifyEmailCode({ code: otp });
+
+      if (signIn.status === "complete") {
+        await signIn.finalize({
+          navigate: ({ decorateUrl }) =>
+            router.replace(decorateUrl("/") as Href),
+        });
+      } else {
+        setLocalError("Verification incomplete. Try again.");
+      }
+    } catch (err: any) {
+      const message =
+        err?.errors?.[0]?.longMessage ||
+        err?.errors?.[0]?.message ||
+        "Invalid code. Try again.";
+
+      setLocalError(message);
     }
   };
 
@@ -308,17 +361,47 @@ export default function SignInScreen() {
                   onPress={() => setMode("email")}
                   activeOpacity={0.75}
                 >
-                  <Feather name="mail" size={18} color={colors.mutedForeground} />
+                  <Feather
+                    name="mail"
+                    size={18}
+                    color={colors.mutedForeground}
+                  />
                   <Text style={styles.emailBtnText}>Continue with Email</Text>
+                </TouchableOpacity>
+              </>
+            ) : mode === "otp" ? (
+              <>
+                <Text style={styles.sectionTitle}>Enter verification code</Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter code"
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="number-pad"
+                />
+
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={onVerifyOtp}
+                >
+                  <Text style={styles.primaryBtnText}>Verify Code</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <TouchableOpacity
                   style={styles.backBtn}
-                  onPress={() => { setMode("options"); setLocalError(""); }}
+                  onPress={() => {
+                    setMode("options");
+                    setLocalError("");
+                  }}
                 >
-                  <Feather name="arrow-left" size={16} color={colors.mutedForeground} />
+                  <Feather
+                    name="arrow-left"
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
                   <Text style={styles.backBtnText}>Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.sectionTitle}>Sign in with email</Text>
@@ -367,7 +450,7 @@ export default function SignInScreen() {
                   {isLoading ? (
                     <ActivityIndicator color="#ffffff" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Sign In</Text>
+                    <Text style={styles.primaryBtnText}>Sign In - test</Text>
                   )}
                 </TouchableOpacity>
               </>

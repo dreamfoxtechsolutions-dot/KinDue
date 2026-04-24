@@ -36,9 +36,9 @@ function ProtectedRoute({
     );
   }
 
-  // if (!isSignedIn) {
-  //   return <RedirectToSignIn />;
-  // }
+  if (!isSignedIn) {
+    return <RedirectToSignIn />;
+  }
 
   return <Component />;
 }
