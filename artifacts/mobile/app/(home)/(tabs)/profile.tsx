@@ -15,10 +15,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth, useUser } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
+import { HouseholdSwitcher } from "@/components/HouseholdSwitcher";
+import { usePushDiagnostics } from "@/hooks/PushNotificationsProvider";
 import {
   useListHouseholds,
   getListHouseholdsQueryKey,
@@ -905,6 +907,7 @@ function MemberActionsSheet({
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { signOut } = useAuth();
   const { user } = useUser();
   const { householdId } = useHouseholdStore();
@@ -912,10 +915,13 @@ export default function ProfileScreen() {
     query: { queryKey: getListHouseholdsQueryKey(), refetchInterval: 60_000, refetchIntervalInBackground: false },
   });
   const activeId = householdId ?? households?.[0]?.id;
+  const activeHousehold = households?.find((h) => h.id === activeId) ?? households?.[0];
   const { data: meData } = useGetMe();
   const { data: members, refetch: refetchMembers } = useListHouseholdMembers(activeId ?? 0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSwitcher, setShowSwitcher] = useState(false);
+  const pushDiag = usePushDiagnostics();
 
   const myMember = members?.find(
     (m: HouseholdMember) => m.userId === meData?.id
@@ -1156,7 +1162,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: bottomPad }}
       >
         <View style={s.header}>
-          <Text style={s.title}>Profile</Text>
+          <Text style={s.title}>Settings</Text>
         </View>
 
         <View style={s.profileCard}>
@@ -1178,24 +1184,90 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {activeId && households?.[0] && (
+        {__DEV__ && pushDiag.status !== "registered" && pushDiag.status !== "idle" && pushDiag.status !== "registering" && (
+          <View style={{
+            marginHorizontal: 16,
+            marginBottom: 12,
+            padding: 12,
+            borderRadius: 10,
+            backgroundColor: "#FFF8E1",
+            borderWidth: 1,
+            borderColor: "#FFE082",
+            flexDirection: "row",
+            gap: 10,
+            alignItems: "flex-start",
+          }}>
+            <Feather name="bell-off" size={18} color="#B8860B" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#8B6914", marginBottom: 2 }}>
+                Push notifications inactive
+              </Text>
+              <Text style={{ fontSize: 12, color: "#8B6914", lineHeight: 16 }}>
+                {pushDiag.reason ?? "Unknown reason"}
+              </Text>
+              <Text style={{ fontSize: 10, color: "#8B6914", marginTop: 4, opacity: 0.7 }}>
+                Status: {pushDiag.status} (dev-only banner)
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {activeId && activeHousehold && (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>Household</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 8 }}>
+              <Text style={[s.sectionLabel, { marginBottom: 0, paddingHorizontal: 0 }]}>
+                Households
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push("/(home)/households/list")}
+                activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+              >
+                <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: colors.primary }}>
+                  View all
+                </Text>
+                <Feather name="chevron-right" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
             <View style={s.sectionCard}>
-              <View style={s.householdRow}>
+              <TouchableOpacity
+                style={s.householdRow}
+                activeOpacity={0.7}
+                onPress={() => setShowSwitcher(true)}
+              >
                 <View style={s.householdIcon}>
                   <Feather name="home" size={18} color={colors.primary} />
                 </View>
-                <Text style={s.householdName}>{households[0].name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.householdName} numberOfLines={1}>{activeHousehold.name}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 2 }}>
+                    Tap to switch
+                  </Text>
+                </View>
                 <RoleBadge role={role} />
-              </View>
+                <Feather name="chevron-down" size={16} color={colors.mutedForeground} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
         {activeId && (members || canManageMembers) && (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>Members</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 8 }}>
+              <Text style={[s.sectionLabel, { marginBottom: 0, paddingHorizontal: 0 }]}>
+                Members
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push("/(home)/households/members")}
+                activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+              >
+                <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: colors.primary }}>
+                  View all
+                </Text>
+                <Feather name="chevron-right" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
             <View style={s.sectionCard}>
               {members?.map((m: HouseholdMember, idx: number) => {
                 const isSelf = m.userId === meData?.id;
@@ -1335,6 +1407,8 @@ export default function ProfileScreen() {
           memberDisplayName={memberDisplayName}
         />
       )}
+
+      <HouseholdSwitcher visible={showSwitcher} onClose={() => setShowSwitcher(false)} />
     </>
   );
 }

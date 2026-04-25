@@ -23,6 +23,7 @@ import type {
   ConnectGmailBody,
   CreateBillBody,
   CreateHouseholdBody,
+  CreateSubscriptionBody,
   DashboardSummary,
   Document,
   ErrorResponse,
@@ -3695,6 +3696,92 @@ export function useListSubscriptions<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Manually add a subscription for the current user
+ */
+export const getCreateSubscriptionUrl = () => {
+  return `/api/subscriptions`;
+};
+
+export const createSubscription = async (
+  createSubscriptionBody: CreateSubscriptionBody,
+  options?: RequestInit,
+): Promise<Subscription> => {
+  return customFetch<Subscription>(getCreateSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSubscriptionBody),
+  });
+};
+
+export const getCreateSubscriptionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscription>>,
+    TError,
+    { data: BodyType<CreateSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSubscription>>,
+  TError,
+  { data: BodyType<CreateSubscriptionBody> },
+  TContext
+> => {
+  const mutationKey = ["createSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSubscription>>,
+    { data: BodyType<CreateSubscriptionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSubscription(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubscription>>
+>;
+export type CreateSubscriptionMutationBody = BodyType<CreateSubscriptionBody>;
+export type CreateSubscriptionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Manually add a subscription for the current user
+ */
+export const useCreateSubscription = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscription>>,
+    TError,
+    { data: BodyType<CreateSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSubscription>>,
+  TError,
+  { data: BodyType<CreateSubscriptionBody> },
+  TContext
+> => {
+  return useMutation(getCreateSubscriptionMutationOptions(options));
+};
 
 /**
  * @summary Scan the user's Gmail for recurring subscription charges

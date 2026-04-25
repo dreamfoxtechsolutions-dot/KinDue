@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useUser } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 import { useHouseholdStore } from "@/context/householdStore";
+import { HouseholdSwitcher } from "@/components/HouseholdSwitcher";
 import {
   useGetHouseholdDashboard,
   useListHouseholds,
@@ -103,6 +104,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useUser();
   const { householdId, setHouseholdId } = useHouseholdStore();
+  const [showSwitcher, setShowSwitcher] = React.useState(false);
 
   const {
     data: households,
@@ -305,6 +307,7 @@ export default function DashboardScreen() {
             <Text style={s.setupBtnText}>Set Up Household</Text>
           </TouchableOpacity>
         </View>
+        <HouseholdSwitcher visible={showSwitcher} onClose={() => setShowSwitcher(false)} />
       </View>
     );
   }
@@ -318,6 +321,7 @@ export default function DashboardScreen() {
   const householdName = firstHousehold.name;
 
   return (
+    <>
     <ScrollView
       style={s.container}
       contentContainerStyle={{ paddingBottom: bottomPad }}
@@ -333,9 +337,18 @@ export default function DashboardScreen() {
       }
     >
       <View style={s.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={s.greeting}>Hi, {firstName}</Text>
-          <Text style={s.householdName}>{householdName}</Text>
+          <TouchableOpacity
+            onPress={() => setShowSwitcher(true)}
+            activeOpacity={0.7}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}
+          >
+            <Text style={s.householdName} numberOfLines={1}>
+              {householdName}
+            </Text>
+            <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -421,5 +434,7 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <HouseholdSwitcher visible={showSwitcher} onClose={() => setShowSwitcher(false)} />
+    </>
   );
 }

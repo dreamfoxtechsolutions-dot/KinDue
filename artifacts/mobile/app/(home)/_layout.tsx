@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Redirect, Stack } from "expo-router";
 import { useAuth } from "@clerk/expo";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { PushNotificationsProvider } from "@/hooks/PushNotificationsProvider";
 
 export default function HomeLayout() {
   const { isSignedIn, getToken } = useAuth();
@@ -11,11 +11,10 @@ export default function HomeLayout() {
     setAuthTokenGetter(() => getToken());
   }, [getToken]);
 
-  usePushNotifications();
-
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
   return (
+    <PushNotificationsProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
@@ -37,5 +36,6 @@ export default function HomeLayout() {
         }}
       />
     </Stack>
+    </PushNotificationsProvider>
   );
 }

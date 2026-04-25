@@ -562,6 +562,32 @@ export interface Subscription {
   updatedAt: string;
 }
 
+export type CreateSubscriptionBodyBillingCycle =
+  (typeof CreateSubscriptionBodyBillingCycle)[keyof typeof CreateSubscriptionBodyBillingCycle];
+
+export const CreateSubscriptionBodyBillingCycle = {
+  weekly: "weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  annual: "annual",
+} as const;
+
+export interface CreateSubscriptionBody {
+  name: string;
+  /** @nullable */
+  provider?: string | null;
+  amount: number;
+  billingCycle: CreateSubscriptionBodyBillingCycle;
+  /** @nullable */
+  serviceLocationLabel?: string | null;
+  /** @nullable */
+  cancelUrl?: string | null;
+  /** @nullable */
+  cancelPhone?: string | null;
+  /** @nullable */
+  cancelEmail?: string | null;
+}
+
 export interface SubscriptionScanResult {
   found: number;
   newlyAdded: number;

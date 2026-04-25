@@ -30,11 +30,11 @@ function NativeTabLayout() {
         <Icon sf={{ default: "lock.shield", selected: "lock.shield.fill" }} />
         <Label>Vault</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="more">
+      <NativeTabs.Trigger name="profile">
         <Icon
-          sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }}
+          sf={{ default: "gearshape", selected: "gearshape.fill" }}
         />
-        <Label>More</Label>
+        <Label>Settings</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -58,10 +58,10 @@ const TABS: TabConfig[] = [
   },
   { name: "vault", title: "Vault", symbol: "lock.shield", feather: "shield" },
   {
-    name: "more",
-    title: "More",
-    symbol: "ellipsis.circle",
-    feather: "more-horizontal",
+    name: "profile",
+    title: "Settings",
+    symbol: "gearshape",
+    feather: "settings",
   },
 ];
 

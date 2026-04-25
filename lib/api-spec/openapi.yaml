@@ -767,6 +767,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Subscription"
+    post:
+      operationId: createSubscription
+      tags: [subscriptions]
+      summary: Manually add a subscription for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
 
   /subscriptions/scan-gmail:
     post:
@@ -1628,6 +1645,31 @@ components:
         - dismissed
         - createdAt
         - updatedAt
+
+    CreateSubscriptionBody:
+      type: object
+      properties:
+        name:
+          type: string
+        provider:
+          type: ["string", "null"]
+        amount:
+          type: number
+        billingCycle:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+        serviceLocationLabel:
+          type: ["string", "null"]
+        cancelUrl:
+          type: ["string", "null"]
+        cancelPhone:
+          type: ["string", "null"]
+        cancelEmail:
+          type: ["string", "null"]
+      required:
+        - name
+        - amount
+        - billingCycle
 
     SubscriptionScanResult:
       type: object

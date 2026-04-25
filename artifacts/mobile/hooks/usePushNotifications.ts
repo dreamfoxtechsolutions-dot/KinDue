@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useAuth } from "@clerk/expo";
@@ -8,6 +8,22 @@ import {
   useRegisterPushToken,
   useUnregisterPushToken,
 } from "@workspace/api-client-react";
+
+export type PushStatus =
+  | "idle"
+  | "web_unsupported"
+  | "permission_denied"
+  | "no_project_id"
+  | "expo_go_unsupported"
+  | "registering"
+  | "registered"
+  | "error";
+
+export type PushDiagnostics = {
+  status: PushStatus;
+  reason: string | null;
+  token: string | null;
+};
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -34,12 +50,20 @@ async function setupAndroidChannel() {
 
 let coldStartHandled = false;
 
-export function usePushNotifications() {
+const isExpoGo = Constants.appOwnership === "expo";
+
+export function usePushNotifications(): PushDiagnostics {
   const { isSignedIn } = useAuth();
   const router = useRouter();
   const tokenRef = useRef<string | null>(null);
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
+
+  const [diagnostics, setDiagnostics] = useState<PushDiagnostics>({
+    status: "idle",
+    reason: null,
+    token: null,
+  });
 
   const { mutateAsync: registerToken } = useRegisterPushToken();
   const { mutateAsync: unregisterToken } = useUnregisterPushToken();
@@ -61,7 +85,12 @@ export function usePushNotifications() {
     (async () => {
       await setupAndroidChannel();
 
-      if (Platform.OS === "web") return;
+      if (Platform.OS === "web") {
+        const reason = "Push notifications are not supported on web.";
+        console.warn(`[push] ${reason}`);
+        if (mounted) setDiagnostics({ status: "web_unsupported", reason, token: null });
+        return;
+      }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -72,7 +101,9 @@ export function usePushNotifications() {
       }
 
       if (finalStatus !== "granted") {
-        console.log("[push] Permission not granted for notifications");
+        const reason = "Notification permission was denied. Enable it in your device settings.";
+        console.warn(`[push] ${reason}`);
+        if (mounted) setDiagnostics({ status: "permission_denied", reason, token: null });
         return;
       }
 
@@ -81,9 +112,22 @@ export function usePushNotifications() {
         Constants.easConfig?.projectId;
 
       if (!projectId) {
-        console.log("[push] No EAS project ID — skipping push token fetch (dev mode)");
+        const reason =
+          "No EAS project ID configured (missing eas.json / app.json extra.eas.projectId). Push tokens cannot be issued in this build.";
+        console.warn(`[push] ${reason}`);
+        if (mounted) setDiagnostics({ status: "no_project_id", reason, token: null });
         return;
       }
+
+      if (isExpoGo) {
+        const reason =
+          "Expo Go (SDK 53+) no longer supports remote push notifications. Use a development build to test push.";
+        console.warn(`[push] ${reason}`);
+        if (mounted) setDiagnostics({ status: "expo_go_unsupported", reason, token: null });
+        return;
+      }
+
+      if (mounted) setDiagnostics((d) => ({ ...d, status: "registering", reason: null }));
 
       try {
         const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
@@ -95,8 +139,13 @@ export function usePushNotifications() {
           ? (Platform.OS as "ios" | "android" | "web")
           : "ios";
         await registerToken({ data: { token: tokenData.data, platform } });
+        if (mounted) {
+          setDiagnostics({ status: "registered", reason: null, token: tokenData.data });
+        }
       } catch (err) {
-        console.log("[push] Could not get or register push token:", err);
+        const reason = err instanceof Error ? err.message : String(err);
+        console.warn("[push] Could not get or register push token:", reason);
+        if (mounted) setDiagnostics({ status: "error", reason, token: null });
       }
     })();
 
@@ -145,4 +194,6 @@ export function usePushNotifications() {
       responseListener.current?.remove();
     };
   }, [isSignedIn, registerToken, unregisterToken, router]);
+
+  return diagnostics;
 }

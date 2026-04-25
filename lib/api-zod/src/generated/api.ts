@@ -1262,6 +1262,20 @@ export const ListSubscriptionsResponse = zod.array(
 );
 
 /**
+ * @summary Manually add a subscription for the current user
+ */
+export const CreateSubscriptionBody = zod.object({
+  name: zod.string(),
+  provider: zod.string().nullish(),
+  amount: zod.number(),
+  billingCycle: zod.enum(["weekly", "monthly", "quarterly", "annual"]),
+  serviceLocationLabel: zod.string().nullish(),
+  cancelUrl: zod.string().nullish(),
+  cancelPhone: zod.string().nullish(),
+  cancelEmail: zod.string().nullish(),
+});
+
+/**
  * @summary Scan the user's Gmail for recurring subscription charges
  */
 export const ScanGmailResponse = zod.object({
