@@ -6,9 +6,11 @@ import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { useColors } from "@/hooks/useColors";
 
+// On iOS 26+ NativeTabs gives us the system liquid-glass tab bar. The system
+// styles it for us — we deliberately don't override colours here.
 function NativeTabLayout() {
   return (
     <NativeTabs>
@@ -20,18 +22,52 @@ function NativeTabLayout() {
         <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
         <Label>Bills</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>Profile</Label>
+      <NativeTabs.Trigger name="subscriptions">
+        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
+        <Label>Subs</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="vault">
+        <Icon sf={{ default: "lock.shield", selected: "lock.shield.fill" }} />
+        <Label>Vault</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="more">
+        <Icon
+          sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }}
+        />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
+type TabConfig = {
+  name: string;
+  title: string;
+  symbol: string;
+  feather: keyof typeof Feather.glyphMap;
+};
+
+const TABS: TabConfig[] = [
+  { name: "index", title: "Home", symbol: "house", feather: "home" },
+  { name: "bills", title: "Bills", symbol: "doc.text", feather: "file-text" },
+  {
+    name: "subscriptions",
+    title: "Subs",
+    symbol: "creditcard",
+    feather: "credit-card",
+  },
+  { name: "vault", title: "Vault", symbol: "lock.shield", feather: "shield" },
+  {
+    name: "more",
+    title: "More",
+    symbol: "ellipsis.circle",
+    feather: "more-horizontal",
+  },
+];
+
 function ClassicTabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
-  const safeAreaInsets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
@@ -48,9 +84,9 @@ function ClassicTabLayout() {
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: colors.border,
           elevation: 0,
-          paddingBottom: safeAreaInsets.bottom,
           ...(isWeb ? { height: 84 } : {}),
         },
+        tabBarLabelStyle: { fontFamily: "Inter_500Medium", fontSize: 11 },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
@@ -60,47 +96,33 @@ function ClassicTabLayout() {
             />
           ) : isWeb ? (
             <View
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: colors.background },
+              ]}
             />
           ) : null,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="bills"
-        options={{
-          title: "Bills",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="doc.text" tintColor={color} size={24} />
-            ) : (
-              <Feather name="file-text" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
-        }}
-      />
+      {TABS.map((t) => (
+        <Tabs.Screen
+          key={t.name}
+          name={t.name}
+          options={{
+            title: t.title,
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView
+                  name={t.symbol as never}
+                  tintColor={color}
+                  size={24}
+                />
+              ) : (
+                <Feather name={t.feather} size={22} color={color} />
+              ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
