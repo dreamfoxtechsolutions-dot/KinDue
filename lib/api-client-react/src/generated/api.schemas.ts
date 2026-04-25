@@ -356,6 +356,7 @@ export interface RejectBillBody {
 
 export interface MarkBillPaidBody {
   paidDate?: string;
+  /** Object storage path for the receipt (required for CG/Other roles) */
   receiptStorageKey?: string;
   receiptFileName?: string;
   receiptMimeType?: string;
@@ -518,6 +519,52 @@ export interface AcceptCandidateBody {
   dueDate?: string;
   isRecurring?: boolean;
   recurrenceInterval?: AcceptCandidateBodyRecurrenceInterval;
+}
+
+export type SubscriptionBillingCycle =
+  (typeof SubscriptionBillingCycle)[keyof typeof SubscriptionBillingCycle];
+
+export const SubscriptionBillingCycle = {
+  weekly: "weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  annual: "annual",
+} as const;
+
+export type SubscriptionStatus =
+  (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
+
+export const SubscriptionStatus = {
+  active: "active",
+  paused: "paused",
+  cancelled: "cancelled",
+} as const;
+
+export interface Subscription {
+  id: number;
+  userId: number;
+  name: string;
+  /** @nullable */
+  provider?: string | null;
+  amount: number;
+  billingCycle: SubscriptionBillingCycle;
+  /** @nullable */
+  serviceLocationLabel?: string | null;
+  status: SubscriptionStatus;
+  /** @nullable */
+  cancelUrl?: string | null;
+  /** @nullable */
+  cancelPhone?: string | null;
+  /** @nullable */
+  cancelEmail?: string | null;
+  dismissed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubscriptionScanResult {
+  found: number;
+  newlyAdded: number;
 }
 
 export interface PlaidLinkToken {

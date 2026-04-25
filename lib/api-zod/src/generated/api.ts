@@ -233,6 +233,7 @@ export const GetHouseholdDashboardResponse = zod.object({
         amount: zod.number().nullish(),
         dueDate: zod.coerce.date().nullish(),
         status: zod.enum([
+          "approved",
           "due",
           "overdue",
           "paid",
@@ -427,7 +428,14 @@ export const ListBillsResponseItem = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -518,7 +526,14 @@ export const GetBillResponse = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -603,7 +618,14 @@ export const UpdateBillResponse = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -670,7 +692,14 @@ export const ApproveBillResponse = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -733,7 +762,14 @@ export const RejectBillResponse = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -777,6 +813,15 @@ export const MarkBillPaidParams = zod.object({
 
 export const MarkBillPaidBody = zod.object({
   paidDate: zod.coerce.date().optional(),
+  receiptStorageKey: zod
+    .string()
+    .optional()
+    .describe(
+      "Object storage path for the receipt (required for CG\/Other roles)",
+    ),
+  receiptFileName: zod.string().optional(),
+  receiptMimeType: zod.string().optional(),
+  receiptFileSize: zod.number().optional(),
 });
 
 export const MarkBillPaidResponse = zod.object({
@@ -796,7 +841,14 @@ export const MarkBillPaidResponse = zod.object({
   ]),
   amount: zod.number().nullish(),
   dueDate: zod.coerce.date().nullish(),
-  status: zod.enum(["due", "overdue", "paid", "pending_approval", "rejected"]),
+  status: zod.enum([
+    "approved",
+    "due",
+    "overdue",
+    "paid",
+    "pending_approval",
+    "rejected",
+  ]),
   isRecurring: zod.boolean(),
   recurrenceInterval: zod
     .enum(["weekly", "monthly", "quarterly", "annual", "null"])
@@ -970,6 +1022,7 @@ export const GetTriageSummaryResponse = zod.object({
         amount: zod.number().nullish(),
         dueDate: zod.coerce.date().nullish(),
         status: zod.enum([
+          "approved",
           "due",
           "overdue",
           "paid",
@@ -1183,6 +1236,44 @@ export const DismissGmailBillCandidateResponse = zod.object({
     .nullish(),
   status: zod.enum(["pending", "accepted", "dismissed"]),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List subscriptions for the current user
+ */
+export const ListSubscriptionsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  name: zod.string(),
+  provider: zod.string().nullish(),
+  amount: zod.number(),
+  billingCycle: zod.enum(["weekly", "monthly", "quarterly", "annual"]),
+  serviceLocationLabel: zod.string().nullish(),
+  status: zod.enum(["active", "paused", "cancelled"]),
+  cancelUrl: zod.string().nullish(),
+  cancelPhone: zod.string().nullish(),
+  cancelEmail: zod.string().nullish(),
+  dismissed: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListSubscriptionsResponse = zod.array(
+  ListSubscriptionsResponseItem,
+);
+
+/**
+ * @summary Scan the user's Gmail for recurring subscription charges
+ */
+export const ScanGmailResponse = zod.object({
+  found: zod.number(),
+  newlyAdded: zod.number(),
+});
+
+/**
+ * @summary Dismiss / delete a subscription
+ */
+export const DeleteSubscriptionParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

@@ -10,6 +10,7 @@ import plaidRouter from "./plaid";
 import auditRouter from "./audit";
 import storageRouter from "./storage";
 import shortcutsRouter from "./shortcuts";
+import subscriptionsRouter from "./subscriptions";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(triageRouter);
 router.use(gmailRouter);
 router.use(plaidRouter);
 router.use(auditRouter);
+router.use(subscriptionsRouter);
 
 export default router;

@@ -30,6 +30,8 @@ tags:
     description: Audit log
   - name: notifications
     description: Notification settings
+  - name: subscriptions
+    description: Recurring subscriptions tracked for the current user
 
 paths:
   /healthz:
@@ -748,6 +750,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GmailBillCandidate"
+
+  # ── SUBSCRIPTIONS ────────────────────────────────────────────────────────────
+
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags: [subscriptions]
+      summary: List subscriptions for the current user
+      responses:
+        "200":
+          description: Subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+
+  /subscriptions/scan-gmail:
+    post:
+      operationId: scanGmail
+      tags: [subscriptions]
+      summary: Scan the user's Gmail for recurring subscription charges
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionScanResult"
+
+  /subscriptions/{id}:
+    delete:
+      operationId: deleteSubscription
+      tags: [subscriptions]
+      summary: Dismiss / delete a subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   # ── PLAID / LINKED ACCOUNTS ──────────────────────────────────────────────────
 
@@ -1533,6 +1580,65 @@ components:
         recurrenceInterval:
           type: string
           enum: [weekly, monthly, quarterly, annual]
+
+    # ── SUBSCRIPTIONS ─────────────────────────────────────────────────────────────
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        provider:
+          type: ["string", "null"]
+        amount:
+          type: number
+        billingCycle:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+        serviceLocationLabel:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, paused, cancelled]
+        cancelUrl:
+          type: ["string", "null"]
+        cancelPhone:
+          type: ["string", "null"]
+        cancelEmail:
+          type: ["string", "null"]
+        dismissed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - name
+        - amount
+        - billingCycle
+        - status
+        - dismissed
+        - createdAt
+        - updatedAt
+
+    SubscriptionScanResult:
+      type: object
+      properties:
+        found:
+          type: integer
+        newlyAdded:
+          type: integer
+      required:
+        - found
+        - newlyAdded
 
     # ── PLAID ─────────────────────────────────────────────────────────────────────
 

@@ -47,6 +47,8 @@ import type {
   ReAuthenticateBody,
   RegisterPushTokenBody,
   RejectBillBody,
+  Subscription,
+  SubscriptionScanResult,
   SyncResult,
   Transaction,
   TriageSummary,
@@ -3617,6 +3619,246 @@ export const useDismissGmailBillCandidate = <
   TContext
 > => {
   return useMutation(getDismissGmailBillCandidateMutationOptions(options));
+};
+
+/**
+ * @summary List subscriptions for the current user
+ */
+export const getListSubscriptionsUrl = () => {
+  return `/api/subscriptions`;
+};
+
+export const listSubscriptions = async (
+  options?: RequestInit,
+): Promise<Subscription[]> => {
+  return customFetch<Subscription[]>(getListSubscriptionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSubscriptionsQueryKey = () => {
+  return [`/api/subscriptions`] as const;
+};
+
+export const getListSubscriptionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSubscriptions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSubscriptions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSubscriptionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSubscriptions>>
+  > = ({ signal }) => listSubscriptions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSubscriptions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSubscriptionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSubscriptions>>
+>;
+export type ListSubscriptionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List subscriptions for the current user
+ */
+
+export function useListSubscriptions<
+  TData = Awaited<ReturnType<typeof listSubscriptions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSubscriptions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubscriptionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Scan the user's Gmail for recurring subscription charges
+ */
+export const getScanGmailUrl = () => {
+  return `/api/subscriptions/scan-gmail`;
+};
+
+export const scanGmail = async (
+  options?: RequestInit,
+): Promise<SubscriptionScanResult> => {
+  return customFetch<SubscriptionScanResult>(getScanGmailUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getScanGmailMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["scanGmail"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanGmail>>,
+    void
+  > = () => {
+    return scanGmail(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanGmailMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanGmail>>
+>;
+
+export type ScanGmailMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Scan the user's Gmail for recurring subscription charges
+ */
+export const useScanGmail = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getScanGmailMutationOptions(options));
+};
+
+/**
+ * @summary Dismiss / delete a subscription
+ */
+export const getDeleteSubscriptionUrl = (id: number) => {
+  return `/api/subscriptions/${id}`;
+};
+
+export const deleteSubscription = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSubscriptionUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSubscriptionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubscription>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSubscription>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSubscription>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSubscription(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSubscription>>
+>;
+
+export type DeleteSubscriptionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Dismiss / delete a subscription
+ */
+export const useDeleteSubscription = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubscription>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSubscription>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteSubscriptionMutationOptions(options));
 };
 
 /**

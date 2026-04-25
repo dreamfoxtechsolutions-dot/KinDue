@@ -72,6 +72,7 @@ export default function SubscriptionsTab() {
 
   const subsQuery = useListSubscriptions();
 
+
   const scanMutation = useScanGmail({
     mutation: {
       onSuccess: (res) => {
