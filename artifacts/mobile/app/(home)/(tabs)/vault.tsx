@@ -14,23 +14,26 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  getListHouseholdsQueryKey,
+  useListHouseholds,
+} from "@workspace/api-client-react";
+
+import { useHouseholdStore } from "@/context/householdStore";
+
+type DocumentType = "statement" | "receipt" | "other";
 
 type DocumentRow = {
   id: number;
-  title: string;
-  category: string;
+  householdId: number;
+  billId: number | null;
   fileName: string;
   mimeType: string;
-  uploadedByName?: string;
+  fileSize: number;
+  storageKey: string;
+  type: DocumentType;
+  uploadedByUserId: number | null;
   createdAt: string;
-  expiresAt?: string | null;
-  redacted?: boolean;
-  downloadUrl?: string;
-};
-
-type DocumentsResponse = {
-  documents: DocumentRow[];
-  lockedCategories?: string[];
 };
 
 const ALLOWED_MIME = [
@@ -40,40 +43,34 @@ const ALLOWED_MIME = [
   "image/heic",
 ];
 
-const CATEGORIES = [
-  "POA",
-  "Insurance",
-  "Medical",
-  "Legal",
-  "ID",
-  "Other",
-] as const;
+const TYPE_LABELS: Record<DocumentType, string> = {
+  statement: "Statements",
+  receipt: "Receipts",
+  other: "Other",
+};
 
-async function fetchDocuments(
-  token: string | null,
-): Promise<DocumentsResponse> {
+function baseUrl() {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}` : "";
-
-  const res = await fetch(`${base}/api/documents`, {
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-  });
-
-  if (!res.ok) {
-    if (res.status === 404) return { documents: [], lockedCategories: [] };
-    throw new Error(`HTTP ${res.status}`);
-  }
-
-  const body = await res.json();
-  if (Array.isArray(body)) return { documents: body, lockedCategories: [] };
-  return body;
+  return domain ? `https://${domain}` : "";
 }
 
-function groupByCategory(docs: DocumentRow[]) {
-  const out: Record<string, DocumentRow[]> = {};
+function buildDownloadUrl(storageKey: string): string {
+  // storageKey is stored as "/objects/<id>"; the auth-protected
+  // download route lives at "/api/storage/objects/<id>".
+  const path = storageKey.startsWith("/objects/")
+    ? storageKey.replace("/objects/", "/api/storage/objects/")
+    : `/api/storage/objects/${storageKey.replace(/^\/+/, "")}`;
+  return `${baseUrl()}${path}`;
+}
+
+function groupByType(docs: DocumentRow[]) {
+  const out: Record<DocumentType, DocumentRow[]> = {
+    statement: [],
+    receipt: [],
+    other: [],
+  };
   for (const d of docs) {
-    const key = d.category || "Other";
-    (out[key] ??= []).push(d);
+    (out[d.type] ?? out.other).push(d);
   }
   return out;
 }
@@ -116,7 +113,11 @@ function Button({
         pressed && { opacity: 0.7 },
       ]}
     >
-      <Text style={styles.buttonText}>{loading ? "Loading..." : title}</Text>
+      <Text
+        style={[styles.buttonText, variant === "ghost" && styles.buttonTextGhost]}
+      >
+        {loading ? "Loading..." : title}
+      </Text>
     </Pressable>
   );
 }
@@ -126,7 +127,7 @@ function EmptyState() {
     <View style={styles.empty}>
       <Text style={styles.emptyTitle}>Nothing in the vault yet</Text>
       <Text style={styles.emptyText}>
-        Upload documents from the web app and they will appear here.
+        Upload a household document to keep it stored securely.
       </Text>
     </View>
   );
@@ -137,79 +138,96 @@ export default function VaultTab() {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
 
+  const { householdId } = useHouseholdStore();
+  const { data: households } = useListHouseholds({
+    query: {
+      queryKey: getListHouseholdsQueryKey(),
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const activeId = householdId ?? households?.[0]?.id;
+
   const docsQuery = useQuery({
-    queryKey: ["documents"],
-    queryFn: async () => fetchDocuments(await getToken()),
+    queryKey: ["documents", activeId],
+    enabled: !!activeId,
+    queryFn: async (): Promise<DocumentRow[]> => {
+      const token = await getToken();
+      const res = await fetch(
+        `${baseUrl()}/api/households/${activeId}/documents`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
     staleTime: 60_000,
   });
 
   const uploadMutation = useMutation({
     mutationFn: async (input: {
       file: DocumentPicker.DocumentPickerAsset;
-      title: string;
-      category: (typeof CATEGORIES)[number];
+      type: DocumentType;
     }) => {
-      const token = await getToken();
+      if (!activeId) throw new Error("No household selected");
 
-      if (!ALLOWED_MIME.includes(input.file.mimeType ?? "")) {
-        throw new Error("Invalid file type");
+      const token = await getToken();
+      const file = input.file;
+
+      if (!ALLOWED_MIME.includes(file.mimeType ?? "")) {
+        throw new Error("Unsupported file type");
       }
 
-      const urlRes = await fetch(
-        `${process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : ""}/api/household/me/documents/upload-url`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileName: input.file.name,
-            contentType: input.file.mimeType,
-            size: input.file.size ?? 1,
-          }),
+      const urlRes = await fetch(`${baseUrl()}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      );
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size ?? 0,
+          contentType: file.mimeType ?? "application/octet-stream",
+        }),
+      });
+      if (!urlRes.ok) throw new Error("Could not get upload URL");
+      const { uploadURL, objectPath } = (await urlRes.json()) as {
+        uploadURL: string;
+        objectPath: string;
+      };
 
-      if (!urlRes.ok) throw new Error("Upload init failed");
-
-      const { uploadURL, objectPath, uploadToken } = await urlRes.json();
-
-      const file = new ExpoFile(input.file.uri);
-      const bytes = await file.bytes();
+      const expoFile = new ExpoFile(file.uri);
+      const bytes = await expoFile.bytes();
 
       const putRes = await fetch(uploadURL, {
         method: "PUT",
         headers: {
-          "Content-Type": input.file.mimeType ?? "application/octet-stream",
+          "Content-Type": file.mimeType ?? "application/octet-stream",
         },
         body: bytes,
       });
-
       if (!putRes.ok) throw new Error("Upload failed");
 
       const finalizeRes = await fetch(
-        `${process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : ""}/api/household/me/documents`,
+        `${baseUrl()}/api/households/${activeId}/documents`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            title: input.title,
-            category: input.category,
-            objectPath,
-            fileName: input.file.name,
-            uploadToken,
+            fileName: file.name,
+            mimeType: file.mimeType ?? "application/octet-stream",
+            fileSize: file.size ?? 0,
+            storageKey: objectPath,
+            type: input.type,
           }),
         },
       );
-
       if (!finalizeRes.ok) throw new Error("Save failed");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["documents", activeId] });
       Alert.alert("Uploaded");
     },
     onError: (e) =>
@@ -221,30 +239,41 @@ export default function VaultTab() {
   });
 
   async function pickFile() {
+    if (!activeId) {
+      Alert.alert("No household", "You need a household before uploading.");
+      return;
+    }
     setUploading(true);
-
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ALLOWED_MIME,
         copyToCacheDirectory: true,
       });
-
       if (res.canceled) {
         setUploading(false);
         return;
       }
-
       const file = res.assets[0];
-
-      uploadMutation.mutate({
-        file,
-        title: file.name.replace(/\.[^.]+$/, ""),
-        category: "Other",
-      });
-    } catch (e) {
+      if (!file) {
+        setUploading(false);
+        return;
+      }
+      uploadMutation.mutate({ file, type: "other" });
+    } catch {
       setUploading(false);
       Alert.alert("Error picking file");
     }
+  }
+
+  if (!activeId) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.emptyTitle}>No household yet</Text>
+        <Text style={styles.emptyText}>
+          Create or join a household to use the vault.
+        </Text>
+      </View>
+    );
   }
 
   if (docsQuery.isLoading) {
@@ -255,12 +284,10 @@ export default function VaultTab() {
     );
   }
 
-  const data = docsQuery.data ?? { documents: [], lockedCategories: [] };
-  const grouped = groupByCategory(data.documents);
-  const categories = Object.keys(grouped);
-
-  const empty =
-    categories.length === 0 && (data.lockedCategories?.length ?? 0) === 0;
+  const docs = docsQuery.data ?? [];
+  const grouped = groupByType(docs);
+  const orderedTypes: DocumentType[] = ["statement", "receipt", "other"];
+  const visibleTypes = orderedTypes.filter((t) => grouped[t].length > 0);
 
   return (
     <ScrollView
@@ -277,44 +304,38 @@ export default function VaultTab() {
 
       <Button title="Upload document" onPress={pickFile} loading={uploading} />
 
-      {empty ? (
+      {visibleTypes.length === 0 ? (
         <EmptyState />
       ) : (
-        <>
-          {categories.map((cat) => (
-            <Card
-              key={cat}
-              title={cat}
-              subtitle={`${grouped[cat].length} item(s)`}
-            >
-              {grouped[cat].map((d) => (
-                <View key={d.id} style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.docTitle}>
-                      {d.redacted ? "Locked document" : d.title}
-                    </Text>
-                    <Text style={styles.docMeta}>
-                      {d.uploadedByName ?? "Unknown"} ·{" "}
-                      {new Date(d.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-
-                  {!d.redacted && d.downloadUrl ? (
-                    <Button
-                      title="Open"
-                      variant="ghost"
-                      onPress={() =>
-                        Linking.openURL(d.downloadUrl!).catch(() =>
-                          Alert.alert("Cannot open file"),
-                        )
-                      }
-                    />
-                  ) : null}
+        visibleTypes.map((t) => (
+          <Card
+            key={t}
+            title={TYPE_LABELS[t]}
+            subtitle={`${grouped[t].length} item${grouped[t].length === 1 ? "" : "s"}`}
+          >
+            {grouped[t].map((d) => (
+              <View key={d.id} style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.docTitle} numberOfLines={1}>
+                    {d.fileName}
+                  </Text>
+                  <Text style={styles.docMeta}>
+                    {new Date(d.createdAt).toLocaleDateString()}
+                  </Text>
                 </View>
-              ))}
-            </Card>
-          ))}
-        </>
+                <Button
+                  title="Open"
+                  variant="ghost"
+                  onPress={() =>
+                    Linking.openURL(buildDownloadUrl(d.storageKey)).catch(() =>
+                      Alert.alert("Cannot open file"),
+                    )
+                  }
+                />
+              </View>
+            ))}
+          </Card>
+        ))
       )}
     </ScrollView>
   );
@@ -330,6 +351,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 24,
   },
 
   title: {
@@ -397,6 +419,10 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontWeight: "600",
+  },
+
+  buttonTextGhost: {
+    color: "#111",
   },
 
   empty: {
