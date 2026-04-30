@@ -1,6 +1,16 @@
-import { customFetch, HouseholdRole } from "@workspace/api-client-react";
+import { customFetch } from "@workspace/api-client-react";
 
-export { HouseholdRole };
+// HouseholdRole mirrors the backend's `householdMembersTable.role` enum
+// (artifacts/api-server/src/routes/households.ts VALID_ROLES). The
+// generated OpenAPI schemas expose this same set under several names
+// (HouseholdMemberRole, InviteMemberBodyRole, UpdateMemberBodyRole) — we
+// keep one canonical web-side alias to avoid every consumer importing
+// three slightly-different unions.
+export type HouseholdRole =
+  | "primary_user"
+  | "trustee"
+  | "caregiver"
+  | "other";
 
 export type HouseholdPermission =
   | "view_summary"
