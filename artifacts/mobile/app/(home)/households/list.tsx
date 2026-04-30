@@ -121,10 +121,34 @@ export default function HouseholdsListScreen() {
     loader: { flex: 1, alignItems: "center", justifyContent: "center" },
   });
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/"); // or any default route
+    }
+  };
+
   if (isLoading && !households) {
     return (
       <>
-        <Stack.Screen options={{ title: "Households" }} />
+        <Stack.Screen
+          options={{
+            title: "Households",
+            headerLeft: () => (
+              <TouchableOpacity
+                onPress={() => goBack()}
+                style={{ paddingHorizontal: 12 }}
+              >
+                <Feather
+                  name="arrow-left"
+                  size={20}
+                  color={colors.foreground}
+                />
+              </TouchableOpacity>
+            ),
+          }}
+        />
         <View style={[s.container, s.loader]}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -134,7 +158,19 @@ export default function HouseholdsListScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Households" }} />
+      <Stack.Screen
+        options={{
+          title: "Households",
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => goBack()}
+              style={{ paddingHorizontal: 12 }}
+            >
+              <Feather name="arrow-left" size={20} color={colors.foreground} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <ScrollView
         style={s.container}
         contentContainerStyle={{
@@ -150,6 +186,13 @@ export default function HouseholdsListScreen() {
         }
       >
         <View style={s.section}>
+          <TouchableOpacity
+            onPress={() => {
+              goBack();
+            }}
+          >
+            <Text>{"<"}</Text>
+          </TouchableOpacity>
           <Text style={s.sectionLabel}>Your Households</Text>
           <View style={s.card}>
             {households && households.length > 0 ? (
@@ -172,7 +215,11 @@ export default function HouseholdsListScreen() {
                       {isActive ? (
                         <Text style={s.activeBadge}>Active</Text>
                       ) : (
-                        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                        <Feather
+                          name="chevron-right"
+                          size={16}
+                          color={colors.mutedForeground}
+                        />
                       )}
                     </TouchableOpacity>
                   </React.Fragment>
@@ -181,7 +228,9 @@ export default function HouseholdsListScreen() {
             ) : (
               <View style={s.empty}>
                 <Feather name="home" size={28} color={colors.mutedForeground} />
-                <Text style={s.emptyText}>You're not part of any households yet.</Text>
+                <Text style={s.emptyText}>
+                  You're not part of any households yet.
+                </Text>
               </View>
             )}
           </View>

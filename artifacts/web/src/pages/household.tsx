@@ -1,18 +1,11 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useApiClient } from "@/lib/api";
-import { AppShell } from "@/components/layout/AppShell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Link, useSearch, useLocation } from "wouter";
+import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -20,351 +13,508 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, UserPlus, Shield, Star, Heart, User, Crown, Mail, Clock, X } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  householdApi,
+  type HouseholdRole,
+  can,
+} from "@/lib/household-api";
+import { HOUSEHOLD_ME_KEY, useHouseholdMe } from "@/hooks/use-household";
+import {
+  Users,
+  ScrollText,
+  AlertTriangle,
+  Loader2,
+  Trash2,
+  Send,
+  Copy,
+  X,
+  FolderLock,
+} from "lucide-react";
+import { DocumentsTab } from "@/components/documents-tab";
+import { HouseholdSwitcher } from "@/components/household-switcher";
 
-const ROLE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  primary_user: { label: "Primary User", icon: <Crown size={14} />, color: "text-amber-600 bg-amber-100" },
-  trustee: { label: "Trustee", icon: <Shield size={14} />, color: "text-blue-600 bg-blue-100" },
-  caregiver: { label: "Caregiver", icon: <Heart size={14} />, color: "text-rose-600 bg-rose-100" },
-  other: { label: "Other", icon: <User size={14} />, color: "text-gray-600 bg-gray-100" },
-};
+// Four user-facing roles. `owner` (Primary user) is shown only as a badge
+// for the household creator — never as an invite/role-change choice (you
+// can't grant someone else "Primary user"; ownership transfer is its own
+// flow). `alerts_only` is retired; legacy rows fall back to "Caregiver".
+const ROLE_OPTIONS: { value: HouseholdRole; label: string; desc: string }[] = [
+  {
+    value: "owner",
+    label: "Primary user",
+    desc: "Full administrative access. Manages bills, the vault, members, and all sensitive details.",
+  },
+  {
+    value: "full",
+    label: "Trustee",
+    desc: "Full administrative access — same powers as the Primary user.",
+  },
+  {
+    value: "helper",
+    label: "Family member",
+    desc: "Can scan email for bills, add and edit bills, mark them paid, and cancel subscriptions. Cannot delete bills, invite members, or see sensitive numbers.",
+  },
+  {
+    value: "view_alerts",
+    label: "Caregiver",
+    desc: "View-only access to the bill list and reminders. Can comment and coordinate, but cannot edit, pay, or scan. Sensitive numbers stay hidden.",
+  },
+  {
+    value: "alerts_only",
+    label: "Caregiver",
+    desc: "View-only access to the bill list and reminders. Can comment and coordinate, but cannot edit, pay, or scan. Sensitive numbers stay hidden.",
+  },
+];
 
-export default function Household() {
-  const api = useApiClient();
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [showCreate, setShowCreate] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
+// Roles offered when inviting or changing a member. Excludes `owner`
+// (can't be granted by invite) and `alerts_only` (retired).
+const INVITE_ROLE_OPTIONS = ROLE_OPTIONS.filter(
+  (r) => r.value !== "owner" && r.value !== "alerts_only",
+);
 
-  const { data: household, isLoading: loadingHousehold } = useQuery({
-    queryKey: ["household"],
-    queryFn: () => api.get("/households/mine"),
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
-  });
+function roleBadge(role: HouseholdRole) {
+  const opt = ROLE_OPTIONS.find((r) => r.value === role);
+  return (
+    <Badge variant={role === "owner" ? "default" : "outline"} className="text-[10px]">
+      {opt?.label ?? role}
+    </Badge>
+  );
+}
 
-  const { data: members = [], isLoading: loadingMembers } = useQuery({
-    queryKey: ["household", "members"],
-    queryFn: () => api.get("/households/mine/members"),
-    enabled: !!household,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
-  });
+const VALID_TABS = new Set(["members", "documents", "audit"]);
 
-  const isAdmin = household &&
-    (household.myRole === "primary_user" || household.myRole === "trustee");
+export function HouseholdPage() {
+  const me = useHouseholdMe();
+  const data = me.data;
+  const search = useSearch();
+  const requestedTab = new URLSearchParams(search).get("tab") ?? "";
+  // The old "invites" tab has been folded into "members"; treat any
+  // legacy ?tab=invites deep links as a request for the members tab.
+  const normalizedTab = requestedTab === "invites" ? "members" : requestedTab;
+  const initialTab = VALID_TABS.has(normalizedTab) ? normalizedTab : "members";
 
-  const { data: pendingInvites = [], isLoading: loadingInvites } = useQuery({
-    queryKey: ["household", "invites"],
-    queryFn: () => api.get("/households/mine/invites"),
-    enabled: !!household && isAdmin,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
-  });
-
-  const createHousehold = useMutation({
-    mutationFn: (data: any) => api.post("/households", data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["household"] });
-      setShowCreate(false);
-      toast({ title: "Household created!" });
-    },
-    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
-  });
-
-  const inviteMember = useMutation({
-    mutationFn: (data: any) => api.post("/households/mine/members/invite", data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["household", "members"] });
-      qc.invalidateQueries({ queryKey: ["household", "invites"] });
-      setShowInvite(false);
-      toast({ title: "Invitation sent!" });
-    },
-    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
-  });
-
-  const cancelInvite = useMutation({
-    mutationFn: (memberId: number) => api.delete(`/households/mine/invites/${memberId}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["household", "invites"] });
-      toast({ title: "Invite cancelled" });
-    },
-    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
-  });
-
-  if (loadingHousehold) {
+  if (me.isLoading || !data) {
     return (
-      <AppShell>
-        <div className="p-6 text-muted-foreground">Loading household...</div>
-      </AppShell>
-    );
-  }
-
-  if (!household) {
-    return (
-      <AppShell>
-        <div className="p-6 max-w-2xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Household</h1>
-          </div>
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Users size={40} className="mx-auto mb-4 text-muted-foreground/40" />
-              <p className="text-muted-foreground font-medium">No household yet</p>
-              <p className="text-sm text-muted-foreground mt-1">Create a household to start managing bills together</p>
-              <Button className="mt-4" onClick={() => setShowCreate(true)}>
-                <UserPlus size={16} className="mr-2" /> Create Household
-              </Button>
-            </CardContent>
-          </Card>
-
-          <CreateHouseholdDialog
-            open={showCreate}
-            onClose={() => setShowCreate(false)}
-            onSubmit={(data) => createHousehold.mutate(data)}
-            loading={createHousehold.isPending}
-          />
+      <Layout>
+        <div className="flex items-center gap-2 text-muted-foreground py-12">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading household…
         </div>
-      </AppShell>
+      </Layout>
     );
   }
 
   return (
-    <AppShell>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{household.name}</h1>
-            <p className="text-muted-foreground text-sm mt-1">{members.length} member{members.length !== 1 ? "s" : ""}</p>
-          </div>
-          {isAdmin && (
-            <Button onClick={() => setShowInvite(true)} className="gap-2">
-              <UserPlus size={16} /> Invite Member
-            </Button>
-          )}
+    <Layout>
+      <div className="flex flex-col gap-2 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="font-serif text-2xl font-medium tracking-tight">
+            {data.household.name}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            You are signed in as{" "}
+            <span className="font-medium text-foreground">{data.me.displayName}</span>{" "}
+            ({data.me.roleLabel}).
+          </p>
         </div>
-
-        {/* Role legend */}
-        <Card className="bg-muted/30">
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Role Permissions</p>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {Object.entries(ROLE_LABELS).map(([role, info]) => (
-                <div key={role} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${info.color}`}>
-                    {info.icon} {info.label}
-                  </span>
-                  <span>{roleDescription(role)}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Members */}
-        {loadingMembers ? (
-          <div className="text-center py-8 text-muted-foreground">Loading members...</div>
-        ) : (
-          <div className="grid gap-3">
-            {members.map((member: any) => {
-              const roleInfo = ROLE_LABELS[member.role] || ROLE_LABELS["other"];
-              return (
-                <Card key={member.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-primary font-semibold text-sm">
-                          {(member.user?.name || member.user?.email || "?")[0].toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground">{member.user?.name || "Unnamed"}</p>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                          <Mail size={11} /> {member.user?.email || member.invite_email || "No email"}
-                        </div>
-                      </div>
-                      <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${roleInfo.color}`}>
-                        {roleInfo.icon} {roleInfo.label}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pending Invites — visible to admins only */}
-        {isAdmin && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Pending Invites
-              </h2>
-              {pendingInvites.length > 0 && (
-                <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-medium">
-                  {pendingInvites.length}
-                </span>
-              )}
-            </div>
-
-            {loadingInvites ? (
-              <div className="text-center py-4 text-muted-foreground text-sm">Loading invites...</div>
-            ) : pendingInvites.length === 0 ? (
-              <Card className="bg-muted/20">
-                <CardContent className="py-6 text-center">
-                  <p className="text-sm text-muted-foreground">No pending invites</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-3">
-                {pendingInvites.map((invite: any) => {
-                  const roleInfo = ROLE_LABELS[invite.role] || ROLE_LABELS["other"];
-                  return (
-                    <Card key={invite.id} className="border-dashed border-amber-200 bg-amber-50/40">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                            <Clock size={16} className="text-amber-600" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-foreground">{invite.email}</p>
-                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200">
-                                Pending
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <Clock size={11} /> Invited {formatDate(invite.invitedAt)}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${roleInfo.color}`}>
-                              {roleInfo.icon} {roleInfo.label}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
-                              onClick={() => cancelInvite.mutate(invite.id)}
-                              disabled={cancelInvite.isPending}
-                              title="Cancel invite"
-                            >
-                              <X size={14} />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <HouseholdSwitcher />
+          <Link href="/household/escalations">
+            <Button variant="outline" size="sm" className="gap-2">
+              <AlertTriangle className="w-3.5 h-3.5" /> Escalation rules
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {isAdmin && (
-        <InviteMemberDialog
-          open={showInvite}
-          onClose={() => setShowInvite(false)}
-          onSubmit={(data) => inviteMember.mutate(data)}
-          loading={inviteMember.isPending}
-        />
+      <Tabs defaultValue={initialTab} className="mt-6">
+        <TabsList>
+          <TabsTrigger value="members" className="gap-2">
+            <Users className="w-3.5 h-3.5" /> Members
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-2" data-testid="tab-documents">
+            <FolderLock className="w-3.5 h-3.5" /> Documents
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-2">
+            <ScrollText className="w-3.5 h-3.5" /> Activity
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="members" className="mt-4">
+          <MembersTab />
+        </TabsContent>
+        <TabsContent value="documents" className="mt-4">
+          <DocumentsTab />
+        </TabsContent>
+        <TabsContent value="audit" className="mt-4">
+          <AuditTab />
+        </TabsContent>
+      </Tabs>
+    </Layout>
+  );
+}
+
+function MembersTab() {
+  const me = useHouseholdMe();
+  const data = me.data!;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const canManage = can(data, "manage_members");
+
+  const change = useMutation({
+    mutationFn: (v: { userId: string; role: HouseholdRole }) =>
+      householdApi.changeRole(v.userId, v.role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HOUSEHOLD_ME_KEY });
+      toast({ title: "Role updated" });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (userId: string) => householdApi.removeMember(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HOUSEHOLD_ME_KEY });
+      toast({ title: "Member removed" });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Remove failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-6">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Caregivers and family</CardTitle>
+        <CardDescription>
+          Each role controls how much someone sees and what they can do.
+          Caregivers get gentle reminders and can comment without seeing
+          sensitive financial detail.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {data.members.map((m) => (
+          <div
+            key={m.userId}
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-border rounded-md p-3"
+          >
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{m.displayName}</span>
+                {roleBadge(m.role)}
+                {m.userId === data.me.userId && (
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    You
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">{m.email}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {canManage && m.userId !== data.me.userId && (
+                <Select
+                  value={m.role}
+                  onValueChange={(role) =>
+                    change.mutate({ userId: m.userId, role: role as HouseholdRole })
+                  }
+                >
+                  <SelectTrigger className="h-8 w-[160px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVITE_ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value} className="text-xs">
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {canManage && m.userId !== data.me.userId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm(`Remove ${m.displayName} from the household?`))
+                      remove.mutate(m.userId);
+                  }}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+    {/* Invites — folded in from the old "Invites" tab so adding and
+        managing people happens in one place. */}
+    <InvitesTab />
+    </div>
+  );
+}
+
+function InvitesTab() {
+  const me = useHouseholdMe();
+  const data = me.data!;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const canInvite = can(data, "invite_member");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<HouseholdRole>("full");
+  const [note, setNote] = useState("");
+
+  const invitesQuery = useQuery({
+    queryKey: ["household", "invites"],
+    queryFn: () => householdApi.invites(),
+  });
+
+  const send = useMutation({
+    mutationFn: () =>
+      householdApi.createInvite({ email: email.trim(), role, note: note.trim() }),
+    onSuccess: (res) => {
+      invitesQuery.refetch();
+      setEmail("");
+      setNote("");
+      toast({
+        title: res.delivered ? "Invite sent" : "Invite created",
+        description: res.delivered
+          ? `Email sent to ${res.invite.email}.`
+          : `Couldn't email yet (${res.deliveryReason ?? "unknown"}). Share the link manually.`,
+      });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Invite failed", description: e.message, variant: "destructive" }),
+  });
+
+  const revoke = useMutation({
+    mutationFn: (id: number) => householdApi.revokeInvite(id),
+    onSuccess: () => {
+      invitesQuery.refetch();
+      toast({ title: "Invite revoked" });
+    },
+  });
+
+  const acceptUrl = (token: string) =>
+    `${window.location.origin}/billguard-ai/invite/${token}`;
+
+  return (
+    <div className="space-y-4">
+      {canInvite && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Invite someone</CardTitle>
+            <CardDescription>
+              They'll get an email with a secure acceptance link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid sm:grid-cols-[1fr_180px] gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-email">Email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="partner@example.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={role} onValueChange={(r) => setRole(r as HouseholdRole)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVITE_ROLE_OPTIONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-note">Personal note (optional)</Label>
+              <Input
+                id="invite-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Mom — added you so you can see Dad's bills."
+              />
+            </div>
+            <Button
+              onClick={() => send.mutate()}
+              disabled={!email.trim() || send.isPending}
+              className="gap-2"
+            >
+              {send.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Send invite
+            </Button>
+          </CardContent>
+        </Card>
       )}
-    </AppShell>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Pending invites</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {invitesQuery.isLoading && (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          )}
+          {invitesQuery.data?.length === 0 && (
+            <p className="text-sm text-muted-foreground">No invites yet.</p>
+          )}
+          {invitesQuery.data?.map((inv) => (
+            <div
+              key={inv.id}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border border-border rounded-md p-3"
+            >
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium">{inv.email}</span>
+                  {roleBadge(inv.role)}
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {inv.status}
+                  </Badge>
+                  {inv.deliveryStatus !== "sent" && inv.status === "pending" && (
+                    <Badge variant="outline" className="text-[10px]">
+                      delivery: {inv.deliveryStatus}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Invited by {inv.invitedByEmail} · expires{" "}
+                  {new Date(inv.expiresAt).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {inv.status === "pending" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => {
+                        navigator.clipboard.writeText(acceptUrl(inv.token));
+                        toast({ title: "Link copied" });
+                      }}
+                    >
+                      <Copy className="w-3 h-3" /> Copy link
+                    </Button>
+                    {canInvite && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => revoke.mutate(inv.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function formatDate(dateStr: string | null | undefined) {
-  if (!dateStr) return "unknown date";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
+function AuditTab() {
+  const [, setLocation] = useLocation();
+  const me = useHouseholdMe();
+  const data = me.data!;
+  const canSee = can(data, "view_audit");
+  const audit = useQuery({
+    queryKey: ["household", "audit"],
+    queryFn: () => householdApi.auditLog(),
+    enabled: canSee,
+  });
 
-function roleDescription(role: string) {
-  const desc: Record<string, string> = {
-    primary_user: "Full access, can approve bills and manage accounts",
-    trustee: "Can approve bills and view financial accounts",
-    caregiver: "Can view bills and record payments (receipt required)",
-    other: "Can view bills only (receipt required for payments)",
-  };
-  return desc[role] || "";
-}
-
-function CreateHouseholdDialog({
-  open, onClose, onSubmit, loading,
-}: {
-  open: boolean; onClose: () => void; onSubmit: (d: any) => void; loading: boolean;
-}) {
-  const [name, setName] = useState("");
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Create Household</DialogTitle></DialogHeader>
-        <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name }); }} className="space-y-4">
-          <div>
-            <Label>Household Name *</Label>
-            <Input
-              placeholder="e.g., Smith Family"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="mt-1"
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Creating..." : "Create"}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+  // Even Family / Backup Caregivers (who don't have view_audit on the
+  // owner-only admin endpoint) need to see "who paid what / who
+  // acknowledged what alert" — that's the entire point of co-caregiver
+  // attribution. The /activity feed uses the family-visible endpoint
+  // and respects per-role visibility itself, so we always offer the link.
+  const fullActivityCta = (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/[0.04] px-4 py-3">
+      <div className="text-sm">
+        <div className="font-medium">Co-caregiver activity</div>
+        <div className="text-xs text-muted-foreground mt-0.5">
+          See who paid which bill and who acknowledged each alert.
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setLocation("/activity")}
+        data-testid="open-activity-feed"
+      >
+        Open log
+      </Button>
+    </div>
   );
-}
 
-function InviteMemberDialog({
-  open, onClose, onSubmit, loading,
-}: {
-  open: boolean; onClose: () => void; onSubmit: (d: any) => void; loading: boolean;
-}) {
-  const [form, setForm] = useState({ email: "", role: "caregiver" });
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  if (!canSee) {
+    return <div className="space-y-3">{fullActivityCta}</div>;
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Invite Member</DialogTitle></DialogHeader>
-        <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-          <div>
-            <Label>Email Address *</Label>
-            <Input
-              type="email"
-              placeholder="member@email.com"
-              value={form.email}
-              onChange={(e) => set("email", e.target.value)}
-              required
-              className="mt-1"
-            />
+    <div className="space-y-3">
+    {fullActivityCta}
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Recent activity (owner view)</CardTitle>
+        <CardDescription>
+          Most recent actions in your household, with attribution.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {audit.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {audit.data?.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nothing logged yet.</p>
+        )}
+        {audit.data?.map((entry) => (
+          <div
+            key={entry.id}
+            className="flex flex-col gap-1 border-b border-border/60 last:border-b-0 py-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm">
+                <span className="font-medium">{entry.actorName || entry.actorEmail || "System"}</span>{" "}
+                — {entry.summary || entry.action}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+                {new Date(entry.createdAt).toLocaleString()}
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              {entry.action} · {entry.entityType}
+              {entry.entityId ? ` #${entry.entityId}` : ""}
+            </span>
           </div>
-          <div>
-            <Label>Role</Label>
-            <Select value={form.role} onValueChange={(v) => set("role", v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="trustee">Trustee</SelectItem>
-                <SelectItem value="caregiver">Caregiver</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Sending..." : "Send Invite"}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        ))}
+      </CardContent>
+    </Card>
+    </div>
   );
 }

@@ -1,354 +1,444 @@
-import { useUser } from "@clerk/react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useApiClient } from "@/lib/api";
-import { AppShell } from "@/components/layout/AppShell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { UserProfile } from "@clerk/react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useUser, useClerk } from "@clerk/react";
+import { useAdminWhoami } from "@workspace/api-client-react";
 import {
-  Settings as SettingsIcon,
+  ChevronDown,
+  ChevronRight,
+  User as UserIcon,
+  BadgeCheck,
+  Eye,
+  BellRing,
   Bell,
-  Shield,
-  CreditCard,
-  Mail,
-  Smartphone,
-  Check,
+  ScanLine,
+  Users,
+  FileText,
+  RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
+  Lock,
+  LogOut,
+  Trash2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { AppShell } from "@/components/app-shell";
+import { PrivacyFooter } from "@/components/privacy-footer";
 
-type NotificationSettings = {
-  id: number;
-  userId: number;
-  emailOverdue: boolean;
-  emailPendingApproval: boolean;
-  emailBillPaid: boolean;
-  emailBillRejected: boolean;
-  emailLowBalance: boolean;
-  pushOverdue: boolean;
-  pushPendingApproval: boolean;
-  pushBillPaid: boolean;
-  pushBillRejected: boolean;
-  pushLowBalance: boolean;
-  updatedAt: string;
-};
+type SettingsAction =
+  | { kind: "openSecurity" };
 
-type DbUser = {
-  id: number;
-  displayName: string | null;
-  email: string;
-};
+type SettingsRowId =
+  | "verify"
+  | "security"
+  | (string & { readonly brand?: unique symbol });
 
-const NOTIFICATION_PREFS = [
+interface SettingsRow {
+  id?: SettingsRowId;
+  href?: string;
+  action?: SettingsAction;
+  label: string;
+  description: string;
+  icon: typeof UserIcon;
+  destructive?: boolean;
+}
+
+interface SettingsGroup {
+  title: string;
+  rows: SettingsRow[];
+}
+
+// Settings hub — a single landing page that gathers every preference,
+// connection, and account-management surface in one scrollable list.
+// The bottom-tab "Settings" entry points here so the user always lands
+// on this overview rather than dropping straight into the profile form.
+const GROUPS: SettingsGroup[] = [
   {
-    label: "Overdue alerts",
-    sub: "Get alerted when bills become overdue",
-    emailKey: "emailOverdue" as keyof NotificationSettings,
-    pushKey: "pushOverdue" as keyof NotificationSettings,
+    title: "Account",
+    rows: [
+      {
+        href: "/profile",
+        label: "Profile",
+        description: "Name, photo, and household contact",
+        icon: UserIcon,
+      },
+      {
+        id: "security",
+        action: { kind: "openSecurity" },
+        label: "Security",
+        description:
+          "Password, two-factor, email & phone, sign-in providers, active devices",
+        icon: ShieldCheck,
+      },
+      {
+        id: "verify",
+        href: "/profile/verify",
+        label: "Identity verification",
+        description: "Confirm who you are for protected actions",
+        icon: BadgeCheck,
+      },
+      {
+        href: "/profile/display",
+        label: "Display & accessibility",
+        description: "Text size, contrast, and theme",
+        icon: Eye,
+      },
+    ],
   },
   {
-    label: "Approval requests",
-    sub: "Notify when a bill is submitted for approval",
-    emailKey: "emailPendingApproval" as keyof NotificationSettings,
-    pushKey: "pushPendingApproval" as keyof NotificationSettings,
+    title: "Alerts & notifications",
+    rows: [
+      {
+        href: "/profile/alerts",
+        label: "Bill alerts",
+        description: "How early we warn you about due dates",
+        icon: BellRing,
+      },
+      {
+        href: "/profile/notifications",
+        label: "Notification channels",
+        description: "Email, push, and SMS preferences",
+        icon: Bell,
+      },
+    ],
   },
   {
-    label: "Payment confirmations",
-    sub: "Notify when a payment is recorded",
-    emailKey: "emailBillPaid" as keyof NotificationSettings,
-    pushKey: "pushBillPaid" as keyof NotificationSettings,
+    title: "Connections",
+    rows: [
+      {
+        href: "/scan",
+        label: "Linked mail & financial accounts",
+        description: "Manage what Kindue scans for bills",
+        icon: ScanLine,
+      },
+      {
+        href: "/subscriptions",
+        label: "Recurring subscriptions",
+        description: "Review what's auto-charging each month",
+        icon: RefreshCw,
+      },
+      {
+        href: "/settings/privacy",
+        label: "Privacy summary",
+        description: "What we read from Gmail · what we never store",
+        icon: Lock,
+      },
+    ],
   },
   {
-    label: "Bill rejected",
-    sub: "Notify when a bill is rejected",
-    emailKey: "emailBillRejected" as keyof NotificationSettings,
-    pushKey: "pushBillRejected" as keyof NotificationSettings,
+    title: "Household & records",
+    rows: [
+      {
+        href: "/household",
+        label: "Household members",
+        description: "Caregivers and shared access",
+        icon: Users,
+      },
+      {
+        href: "/statement",
+        label: "Statement",
+        description: "Itemized history of household spending",
+        icon: FileText,
+      },
+      {
+        href: "/reports",
+        label: "Reports",
+        description: "Tax, estate, and yearly summaries",
+        icon: FileText,
+      },
+    ],
   },
   {
-    label: "Low balance alerts",
-    sub: "Get alerted when account balance is low",
-    emailKey: "emailLowBalance" as keyof NotificationSettings,
-    pushKey: "pushLowBalance" as keyof NotificationSettings,
+    title: "Danger zone",
+    rows: [
+      {
+        href: "/settings/delete-data",
+        label: "Erase my parent's data",
+        description:
+          "Permanently remove every bill, subscription, and document",
+        icon: Trash2,
+        destructive: true,
+      },
+    ],
   },
 ];
 
-export default function Settings() {
-  const { user } = useUser();
-  const api = useApiClient();
-  const queryClient = useQueryClient();
-  const [showClerkProfile, setShowClerkProfile] = useState(false);
-  const [displayName, setDisplayName] = useState("");
+export function SettingsPage() {
+  const { user, isLoaded } = useUser();
+  const clerk = useClerk();
+  const { signOut } = clerk;
+  const [, setLocation] = useLocation();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const { data: whoami } = useAdminWhoami();
+  const isAdmin = whoami?.isAdmin === true;
 
-  const { data: dbUser, isLoading: dbUserLoading } = useQuery<DbUser>({
-    queryKey: ["me"],
-    queryFn: () => api.get("/me"),
-  });
+  const initials =
+    ((user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "")).trim() ||
+    user?.username?.[0] ||
+    user?.primaryEmailAddress?.emailAddress?.[0] ||
+    "U";
 
-  useEffect(() => {
-    if (dbUser?.displayName != null) {
-      setDisplayName(dbUser.displayName);
-    } else if (user) {
-      const clerkName = [user.firstName, user.lastName].filter(Boolean).join(" ");
-      setDisplayName(clerkName);
-    }
-  }, [dbUser, user]);
+  // Hide rows that represent one-time setup steps once they're done.
+  // Verification: hide the row when the user is already verified.
+  // Security: hide once MFA is enabled (the user can still reach the
+  // security center from the Profile page if they need to change things).
+  const verificationStatus = ((user?.unsafeMetadata ?? {}) as {
+    verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
+  }).verificationStatus ?? "unverified";
+  const isVerified = verificationStatus === "verified";
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (data: { displayName: string }) => api.patch("/me", data),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["me"], updated);
-      toast.success("Display name saved");
-    },
-    onError: () => {
-      toast.error("Failed to save display name");
-    },
-  });
+  const mfaUser = user as
+    | (typeof user & {
+        totpEnabled?: boolean;
+        backupCodeEnabled?: boolean;
+        twoFactorEnabled?: boolean;
+      })
+    | null
+    | undefined;
+  const mfaEnabled = Boolean(
+    mfaUser?.twoFactorEnabled ||
+      mfaUser?.totpEnabled ||
+      mfaUser?.backupCodeEnabled,
+  );
 
-  const { data: notifSettings, isLoading: notifLoading } = useQuery<NotificationSettings>({
-    queryKey: ["notification-settings"],
-    queryFn: () => api.get("/me/notification-settings"),
-  });
+  const shouldHideRow = (id?: string) => {
+    if (id === "verify") return isVerified;
+    if (id === "security") return mfaEnabled;
+    return false;
+  };
 
-  const updateNotifMutation = useMutation({
-    mutationFn: (updates: Partial<NotificationSettings>) =>
-      api.patch("/me/notification-settings", updates),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["notification-settings"], updated);
-    },
-    onError: () => {
-      toast.error("Failed to update notification setting");
-      queryClient.invalidateQueries({ queryKey: ["notification-settings"] });
-    },
-  });
-
-  function handleToggle(key: keyof NotificationSettings, currentValue: boolean) {
-    updateNotifMutation.mutate({ [key]: !currentValue });
-  }
-
-  function handleProfileSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!displayName.trim()) return;
-    updateProfileMutation.mutate({ displayName: displayName.trim() });
-  }
+  const visibleGroups = GROUPS.map((g) => ({
+    ...g,
+    rows: g.rows.filter((r) => !shouldHideRow(r.id)),
+  })).filter((g) => g.rows.length > 0);
 
   return (
     <AppShell>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <SettingsIcon size={22} /> Settings
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your account and household preferences</p>
+      <>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-medium">
+              Settings
+            </p>
+            <h1 className="font-serif text-2xl font-medium mt-1">
+              Your preferences
+            </h1>
+            {isLoaded && user && (
+              <p className="text-sm text-muted-foreground mt-1 truncate">
+                {user.fullName ?? user.username ?? "Your account"}
+              </p>
+            )}
+          </div>
+
+          {isLoaded && user && (
+            <ProfileAvatarMenu
+              imageUrl={user.imageUrl}
+              fullName={user.fullName ?? user.username ?? "User"}
+              initials={initials.toUpperCase()}
+              verificationStatus={verificationStatus}
+            />
+          )}
         </div>
 
-        {/* Profile section */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Account Profile</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              {user?.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt="Profile"
-                  className="w-16 h-16 rounded-full border border-border"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-primary text-2xl font-bold">
-                    {user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0] || "?"}
-                  </span>
-                </div>
-              )}
-              <div>
-                <p className="font-semibold text-foreground">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {user?.emailAddresses?.[0]?.emailAddress}
-                </p>
-              </div>
-            </div>
-
-            {/* Display name form wired to PATCH /me */}
-            <form onSubmit={handleProfileSave} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="displayName">Display Name</Label>
-                {dbUserLoading ? (
-                  <Skeleton className="h-9 w-full" />
-                ) : (
-                  <div className="flex gap-2">
-                    <Input
-                      id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="How your name appears to household members"
-                      className="flex-1"
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={updateProfileMutation.isPending || !displayName.trim()}
-                      className="gap-1.5 shrink-0"
+        {visibleGroups.map((group) => {
+          const isOpen = openGroups[group.title] ?? false;
+          const panelId = `settings-group-${group.title.replace(/\s+/g, "-").toLowerCase()}`;
+          return (
+          <section key={group.title} className="space-y-2">
+            <button
+              type="button"
+              onClick={() =>
+                setOpenGroups((prev) => ({
+                  ...prev,
+                  [group.title]: !isOpen,
+                }))
+              }
+              aria-expanded={isOpen}
+              aria-controls={panelId}
+              className="flex w-full items-center justify-between px-1 py-1 text-left rounded hover:bg-muted/40 transition-colors"
+            >
+              <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-medium">
+                {group.title}
+              </span>
+              <ChevronDown
+                className={
+                  "h-4 w-4 text-muted-foreground transition-transform " +
+                  (isOpen ? "rotate-180" : "")
+                }
+              />
+            </button>
+            {isOpen && (
+            <ul id={panelId} className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
+              {group.rows.map((row) => {
+                const Icon = row.icon;
+                const isDestructive = row.destructive === true;
+                const inner = (
+                  <>
+                    <span
+                      className={
+                        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full " +
+                        (isDestructive
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-primary/10 text-primary")
+                      }
                     >
-                      <Check size={14} />
-                      {updateProfileMutation.isPending ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  This name is shown to other household members in the app.
-                </p>
-              </div>
-            </form>
-
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowClerkProfile((v) => !v)}
-              >
-                {showClerkProfile ? "Close" : "Edit Email & Password"}
-              </Button>
-            </div>
-
-            {showClerkProfile && (
-              <div className="mt-2">
-                <UserProfile
-                  appearance={{
-                    elements: {
-                      rootBox: "w-full",
-                      card: "shadow-none border border-border",
-                    },
-                  }}
-                />
-              </div>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={
+                          "font-medium text-sm " +
+                          (isDestructive ? "text-destructive" : "")
+                        }
+                      >
+                        {row.label}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {row.description}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </>
+                );
+                const itemClass =
+                  "flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors w-full text-left";
+                const key = row.href ?? row.label;
+                return (
+                  <li key={key}>
+                    {row.action?.kind === "openSecurity" ? (
+                      <button
+                        type="button"
+                        className={itemClass}
+                        onClick={() => clerk.openUserProfile()}
+                      >
+                        {inner}
+                      </button>
+                    ) : (
+                      <Link href={row.href!} className={itemClass}>
+                        {inner}
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
             )}
-          </CardContent>
-        </Card>
+          </section>
+          );
+        })}
 
-        {/* Notification preferences */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Bell size={16} /> Notification Preferences
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-0 items-center mb-2">
-              <div />
-              <span className="text-xs font-medium text-muted-foreground text-center">Email</span>
-              <span className="text-xs font-medium text-muted-foreground text-center">Push</span>
-            </div>
-            <div className="space-y-0">
-              {notifLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-x-6 items-center py-3 border-b border-border last:border-0">
-                    <div className="space-y-1">
-                      <Skeleton className="h-4 w-36" />
-                      <Skeleton className="h-3 w-52" />
-                    </div>
-                    <Skeleton className="h-5 w-9 rounded-full" />
-                    <Skeleton className="h-5 w-9 rounded-full" />
+        {isAdmin && (
+          <section className="space-y-2">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-medium px-1">
+              Admin
+            </p>
+            <ul className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
+              <li>
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
+                >
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <ShieldCheck className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm">Admin overview</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Tools available to Kindue administrators
+                    </p>
                   </div>
-                ))
-              ) : (
-                NOTIFICATION_PREFS.map((pref) => {
-                  const emailVal = notifSettings ? Boolean(notifSettings[pref.emailKey]) : false;
-                  const pushVal = notifSettings ? Boolean(notifSettings[pref.pushKey]) : false;
-                  return (
-                    <div
-                      key={pref.label}
-                      className="grid grid-cols-[1fr_auto_auto] gap-x-6 items-center py-3 border-b border-border last:border-0"
-                    >
-                      <div>
-                        <Label className="text-sm font-medium text-foreground cursor-default">
-                          {pref.label}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">{pref.sub}</p>
-                      </div>
-                      <Switch
-                        checked={emailVal}
-                        onCheckedChange={() => handleToggle(pref.emailKey, emailVal)}
-                        disabled={updateNotifMutation.isPending}
-                        aria-label={`${pref.label} email`}
-                      />
-                      <Switch
-                        checked={pushVal}
-                        onCheckedChange={() => handleToggle(pref.pushKey, pushVal)}
-                        disabled={updateNotifMutation.isPending}
-                        aria-label={`${pref.label} push`}
-                      />
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </Link>
+              </li>
+            </ul>
+          </section>
+        )}
 
-        {/* Integrations */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield size={16} /> Integrations
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <IntegrationRow
-              icon={<CreditCard size={18} className="text-indigo-600" />}
-              name="Plaid"
-              desc="Link bank accounts and track transactions"
-              status="Connect via Accounts page"
-            />
-            <IntegrationRow
-              icon={<Mail size={18} className="text-red-500" />}
-              name="Gmail"
-              desc="Scan emails for bill statements automatically"
-              status="Not connected"
-            />
-            <IntegrationRow
-              icon={<Smartphone size={18} className="text-green-600" />}
-              name="Push Notifications"
-              desc="Mobile push notifications for the companion app"
-              status="Not configured"
-            />
-          </CardContent>
-        </Card>
-      </div>
+        <Button
+          variant="outline"
+          className="w-full h-12 gap-2"
+          onClick={() => {
+            void signOut({ redirectUrl: import.meta.env.BASE_URL || "/" });
+            setLocation("/");
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
+        <PrivacyFooter />
+      </>
     </AppShell>
   );
 }
 
-function IntegrationRow({
-  icon,
-  name,
-  desc,
-  status,
-}: {
-  icon: React.ReactNode;
-  name: string;
-  desc: string;
-  status: string;
-}) {
+interface ProfileAvatarMenuProps {
+  imageUrl?: string;
+  fullName: string;
+  initials: string;
+  verificationStatus: "unverified" | "pending" | "verified" | "rejected";
+}
+
+// Read-only avatar with verification ring + status badge. Tapping it
+// jumps to the Edit Profile page where the actual photo editor lives.
+function ProfileAvatarMenu({
+  imageUrl,
+  fullName,
+  initials,
+  verificationStatus,
+}: ProfileAvatarMenuProps) {
+  const ringClass =
+    verificationStatus === "verified"
+      ? "ring-emerald-600"
+      : verificationStatus === "pending"
+        ? "ring-amber-500"
+        : "ring-destructive";
+
+  const StatusBadge =
+    verificationStatus === "verified" ? BadgeCheck : ShieldAlert;
+  const badgeClass =
+    verificationStatus === "verified"
+      ? "bg-emerald-600 text-white"
+      : verificationStatus === "pending"
+        ? "bg-amber-500 text-white"
+        : "bg-destructive text-destructive-foreground";
+
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">{icon}</div>
-        <div>
-          <p className="text-sm font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">{desc}</p>
-        </div>
+    <div className="flex flex-col items-end gap-1 shrink-0">
+      <div
+        role="img"
+        aria-label={`Profile photo · ${verificationStatus}`}
+        className="relative"
+      >
+        <Avatar
+          className={`h-14 w-14 ring-2 ring-offset-2 ring-offset-background ${ringClass}`}
+        >
+          <AvatarImage src={imageUrl} alt={fullName} />
+          <AvatarFallback className="text-sm font-medium">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-background ${badgeClass}`}
+        >
+          <StatusBadge className="h-3 w-3" />
+        </span>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">{status}</span>
-        <Button variant="outline" size="sm" disabled>Connect</Button>
-      </div>
+      <span
+        className={
+          "text-[10px] uppercase tracking-[0.16em] font-medium " +
+          (verificationStatus === "verified"
+            ? "text-emerald-700"
+            : verificationStatus === "pending"
+              ? "text-amber-700"
+              : "text-destructive")
+        }
+      >
+        {verificationStatus === "verified"
+          ? "Verified"
+          : verificationStatus === "pending"
+            ? "Pending"
+            : "Unverified"}
+      </span>
     </div>
   );
 }

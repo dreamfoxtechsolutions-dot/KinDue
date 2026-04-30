@@ -4,7 +4,13 @@ import * as RechartsPrimitive from "recharts"
 import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
-const THEMES = { light: "", dark: ".dark" } as const
+// We match BOTH the legacy `.dark` class and the runtime
+// `html[data-theme="dark"]` attribute so chart palettes stay correct
+// regardless of which theme system activates dark mode.
+const THEMES = {
+  light: "",
+  dark: ':is(.dark, html[data-theme="dark"])',
+} as const
 
 export type ChartConfig = {
   [k in string]: {
