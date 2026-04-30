@@ -14,18 +14,19 @@ import {
   UserPlus,
 } from "lucide-react";
 import {
-  useGetDashboard,
-  useListBills,
-  useListPendingBills,
   useListSubscriptions,
   useUpdateBill,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
   BillStatus,
   type Bill,
   type DashboardSummary,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+  useBills,
+  useDashboard,
+  usePendingBills,
+  useInvalidateHouseholdData,
+} from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -81,7 +82,7 @@ export function MomOkayBadge({
   caregiverFor: string;
   onOpenTool: (tab: string) => void;
 }) {
-  const { data: summary, isLoading, isError } = useGetDashboard();
+  const { data: summary, isLoading, isError } = useDashboard();
   if (isLoading || !summary) {
     if (isError) {
       return (
@@ -177,7 +178,7 @@ export function MonthlyImpactStrip({
 }: {
   onOpenTool: (tab: string) => void;
 }) {
-  const { data: summary, isLoading, isError } = useGetDashboard();
+  const { data: summary, isLoading, isError } = useDashboard();
   if (isLoading || !summary) {
     if (isError) {
       return (
@@ -278,13 +279,14 @@ export function TodayChecklist({
   isReviewOpen: boolean;
   onOpenReview: () => void;
 }) {
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const { toast } = useToast();
   const household = useHouseholdMe().data;
   const canMarkPaid = can(household, "mark_paid");
 
-  const billsQuery = useListBills();
-  const pendingQuery = useListPendingBills();
+  const billsQuery = useBills();
+  const pendingQuery = usePendingBills();
   const subscriptionsQuery = useListSubscriptions();
   const bills = billsQuery.data ?? [];
   const pending = pendingQuery.data ?? [];
@@ -361,13 +363,13 @@ export function TodayChecklist({
   const completed = 0;
 
   const markPaid = (billId: number) => {
+    if (householdId == null) return;
     setPendingBillId(billId);
     updateBill.mutate(
-      { id: billId, data: { status: BillStatus.paid } },
+      { householdId, billId, data: { status: BillStatus.paid } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+          invalidate();
           toast({ title: "Marked paid" });
         },
         onSettled: () => setPendingBillId(null),
@@ -551,7 +553,7 @@ export function WeekStrip({
 }: {
   onOpenTool: (tab: string) => void;
 }) {
-  const billsQuery = useListBills();
+  const billsQuery = useBills();
   const bills = billsQuery.data ?? [];
   const billsLoading = billsQuery.isLoading && !billsQuery.data;
   const billsError = billsQuery.isError;
@@ -886,7 +888,7 @@ export function QuickTiles({
   scanPending: boolean;
   lastScanAt: string | null;
 }) {
-  const { data: summary } = useGetDashboard();
+  const { data: summary } = useDashboard();
   const isOkay =
     !!summary &&
     summary.highRiskCount === 0 &&
@@ -978,7 +980,7 @@ export function QuickTiles({
 
 // ---------- Rest state band ----------
 export function RestStateBand({ caregiverFor }: { caregiverFor: string }) {
-  const { data: bills = [] } = useListBills();
+  const { data: bills = [] } = useBills();
   const today = startOfDay(new Date());
   const horizon = addDays(today, 7);
 

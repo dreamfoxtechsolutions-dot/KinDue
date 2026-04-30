@@ -1,3 +1,5 @@
+// TODO: backend not implemented — every method here will 404 at call time.
+// Consumers should expect rejected promises and degrade gracefully.
 import { customFetch } from "@workspace/api-client-react";
 
 export type EscalationRule = {

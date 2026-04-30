@@ -27,13 +27,9 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import {
-  useScanBillsGmail,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
-  getListPendingBillsQueryKey,
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useScanGmail } from "@workspace/api-client-react";
+import { useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import {
   Tooltip,
   TooltipContent,
@@ -140,7 +136,8 @@ const CATEGORY_LABEL: Record<InstitutionCategory, string> = {
 export function ScanPage() {
   const { user, isLoaded } = useUser();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const [, setLocation] = useLocation();
 
   const [emails, setEmails] = useState<string[]>([]);
@@ -269,14 +266,10 @@ export function ScanPage() {
     }
   };
 
-  const scanBills = useScanBillsGmail({
+  const scanBills = useScanGmail({
     mutation: {
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-        queryClient.invalidateQueries({
-          queryKey: getListPendingBillsQueryKey(),
-        });
+        invalidate();
         setLastScan({
           scanned: data.scanned,
           found: data.found,
@@ -625,8 +618,10 @@ export function ScanPage() {
               // button disabled via `canScan` so a too-early click can't
               // 403; admins see it light up the moment status resolves.
               <Button
-                onClick={() => scanBills.mutate()}
-                disabled={!canScan}
+                onClick={() =>
+                  householdId != null && scanBills.mutate({ householdId })
+                }
+                disabled={!canScan || householdId == null}
                 className="shrink-0 gap-2 h-11 px-6"
               >
                 {scanBills.isPending ? (

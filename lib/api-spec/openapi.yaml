@@ -799,6 +799,31 @@ paths:
                 $ref: "#/components/schemas/SubscriptionScanResult"
 
   /subscriptions/{id}:
+    patch:
+      operationId: updateSubscription
+      tags: [subscriptions]
+      summary: Partially update a subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+        "404":
+          description: Not found
     delete:
       operationId: deleteSubscription
       tags: [subscriptions]
@@ -1645,6 +1670,33 @@ components:
         - dismissed
         - createdAt
         - updatedAt
+
+    UpdateSubscriptionBody:
+      type: object
+      description: Partial update — all fields optional.
+      properties:
+        name:
+          type: string
+        provider:
+          type: ["string", "null"]
+        amount:
+          type: number
+        billingCycle:
+          type: string
+          enum: [weekly, monthly, quarterly, annual]
+        serviceLocationLabel:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, paused, cancelled]
+        cancelUrl:
+          type: ["string", "null"]
+        cancelPhone:
+          type: ["string", "null"]
+        cancelEmail:
+          type: ["string", "null"]
+        dismissed:
+          type: boolean
 
     CreateSubscriptionBody:
       type: object

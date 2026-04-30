@@ -34,11 +34,11 @@ import {
 import {
   useUpdateBill,
   useDeleteBill,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
   BillStatus,
   type Bill,
 } from "@workspace/api-client-react";
+import { useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import { useHouseholdMe } from "@/hooks/use-household";
 import { householdApi, can, type HouseholdMember } from "@/lib/household-api";
 import { useToast } from "@/hooks/use-toast";
@@ -94,7 +94,9 @@ function StatLine({
 }
 
 export function BillDetailSheet({ bill, open, onOpenChange, onEdit, onDelete }: Props) {
+  const { householdId } = useActiveHousehold();
   const queryClient = useQueryClient();
+  const invalidateHousehold = useInvalidateHouseholdData();
   const updateBill = useUpdateBill();
   const deleteBill = useDeleteBill();
   const household = useHouseholdMe().data;
@@ -113,14 +115,14 @@ export function BillDetailSheet({ bill, open, onOpenChange, onEdit, onDelete }: 
   const riskDanger = bill.riskLevel === "high" || bill.riskLevel === "critical";
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    invalidateHousehold();
     queryClient.invalidateQueries({ queryKey: ["bill-comments", bill.id] });
   };
 
   const setStatus = (status: BillStatus) => {
+    if (householdId == null) return;
     updateBill.mutate(
-      { id: bill.id, data: { status } },
+      { householdId, billId: bill.id, data: { status } },
       {
         onSuccess: () => {
           invalidate();
@@ -131,8 +133,9 @@ export function BillDetailSheet({ bill, open, onOpenChange, onEdit, onDelete }: 
   };
 
   const handleDelete = () => {
+    if (householdId == null) return;
     deleteBill.mutate(
-      { id: bill.id },
+      { householdId, billId: bill.id },
       {
         onSuccess: () => {
           invalidate();

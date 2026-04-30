@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { useGetDashboard, useListSubscriptions } from "@workspace/api-client-react";
+import { useListSubscriptions } from "@workspace/api-client-react";
+import { useDashboard } from "@/lib/api-hooks";
 import { ShieldAlert, Wallet, CreditCard, TrendingDown, RefreshCw, Mail } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -42,7 +43,7 @@ function StatCell({
 }
 
 export function DashboardSummaryCards() {
-  const { data: summary, isLoading } = useGetDashboard();
+  const { data: summary, isLoading } = useDashboard();
   const { data: subscriptions = [] } = useListSubscriptions();
 
   const activeSubscriptions = subscriptions.filter((s) => !s.dismissed);

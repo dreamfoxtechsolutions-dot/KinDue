@@ -1,16 +1,13 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  useListBills,
   useUpdateBill,
-  useScanBillsGmail,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
-  getListPendingBillsQueryKey,
+  useScanGmail,
   BillStatus,
   BillCategory,
   type Bill,
 } from "@workspace/api-client-react";
+import { useBills, useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import { Link, useLocation } from "wouter";
 import {
   Check,
@@ -110,10 +107,11 @@ function formatLongDate(iso: string | Date): string {
 }
 
 export function SimpleBills() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const { data: bills, isLoading } = useListBills();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
+  const { data: bills, isLoading } = useBills();
   const { canScan } = useScanCapability();
   const [selected, setSelected] = useState<Bill | null>(null);
 
@@ -121,14 +119,10 @@ export function SimpleBills() {
   // when those connectors come online) for new bills. The standalone
   // "Scan" page (linked below) is where the user manages which accounts
   // are connected.
-  const scanBills = useScanBillsGmail({
+  const scanBills = useScanGmail({
     mutation: {
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-        queryClient.invalidateQueries({
-          queryKey: getListPendingBillsQueryKey(),
-        });
+        invalidate();
         toast({
           title: "Scan complete",
           description:
@@ -198,8 +192,10 @@ export function SimpleBills() {
           <div className="space-y-2">
             <Button
               variant="outline"
-              onClick={() => scanBills.mutate()}
-              disabled={scanBills.isPending}
+              onClick={() =>
+                householdId != null && scanBills.mutate({ householdId })
+              }
+              disabled={scanBills.isPending || householdId == null}
               className="w-full h-12 gap-2 uppercase tracking-[0.14em] font-semibold"
             >
               {scanBills.isPending ? (
@@ -396,8 +392,9 @@ function BillDetailsDialog({
   bill: Bill | null;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const updateBill = useUpdateBill();
 
   // shutoffRisk in the data model is a flag, not a date. When the bill is
@@ -408,15 +405,12 @@ function BillDetailsDialog({
   const isPaid = bill?.status === "paid";
 
   const handleMarkPaid = () => {
-    if (!bill?.id) return;
+    if (!bill?.id || householdId == null) return;
     updateBill.mutate(
-      { id: bill.id, data: { status: BillStatus.paid } },
+      { householdId, billId: bill.id, data: { status: BillStatus.paid } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-          queryClient.invalidateQueries({
-            queryKey: getGetDashboardQueryKey(),
-          });
+          invalidate();
           toast({ title: "Marked as paid" });
           onClose();
         },

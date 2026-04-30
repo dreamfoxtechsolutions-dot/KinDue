@@ -9,27 +9,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  useListPendingBills,
   useApproveBill,
   useRejectBill,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
-  getListPendingBillsQueryKey,
   type Bill,
 } from "@workspace/api-client-react";
+import { usePendingBills, useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 
 function Row({ bill }: { bill: Bill }) {
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const approve = useApproveBill();
   const reject = useRejectBill();
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListPendingBillsQueryKey() });
-  };
 
   return (
     <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-center border-b border-border/70 last:border-b-0 py-3">
@@ -65,9 +57,13 @@ function Row({ bill }: { bill: Bill }) {
           variant="outline"
           className="h-8 w-8"
           disabled={reject.isPending}
-          onClick={() =>
-            reject.mutate({ id: bill.id }, { onSuccess: invalidate })
-          }
+          onClick={() => {
+            if (householdId == null) return;
+            reject.mutate(
+              { householdId, billId: bill.id, data: { reason: "" } },
+              { onSuccess: invalidate },
+            );
+          }}
           aria-label="Reject"
           title="Reject"
         >
@@ -77,9 +73,13 @@ function Row({ bill }: { bill: Bill }) {
           size="icon"
           className="h-8 w-8"
           disabled={approve.isPending}
-          onClick={() =>
-            approve.mutate({ id: bill.id }, { onSuccess: invalidate })
-          }
+          onClick={() => {
+            if (householdId == null) return;
+            approve.mutate(
+              { householdId, billId: bill.id },
+              { onSuccess: invalidate },
+            );
+          }}
           aria-label="Approve"
           title="Approve"
         >
@@ -95,7 +95,7 @@ export function PendingReviewBanner({
 }: {
   onOpen: () => void;
 }) {
-  const { data = [] } = useListPendingBills();
+  const { data = [] } = usePendingBills();
   if (data.length === 0) return null;
 
   return (
@@ -122,24 +122,35 @@ export function PendingReviewDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data = [], isLoading } = useListPendingBills();
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const { data = [], isLoading } = usePendingBills();
+  const invalidate = useInvalidateHouseholdData();
   const approve = useApproveBill();
   const reject = useRejectBill();
 
   const approveAll = async () => {
-    await Promise.all(data.map((b) => approve.mutateAsync({ id: b.id })));
-    queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListPendingBillsQueryKey() });
+    if (householdId == null) return;
+    await Promise.all(
+      data.map((b) =>
+        approve.mutateAsync({ householdId, billId: b.id }),
+      ),
+    );
+    invalidate();
     onOpenChange(false);
   };
 
   const rejectAll = async () => {
-    await Promise.all(data.map((b) => reject.mutateAsync({ id: b.id })));
-    queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListPendingBillsQueryKey() });
+    if (householdId == null) return;
+    await Promise.all(
+      data.map((b) =>
+        reject.mutateAsync({
+          householdId,
+          billId: b.id,
+          data: { reason: "" },
+        }),
+      ),
+    );
+    invalidate();
     onOpenChange(false);
   };
 

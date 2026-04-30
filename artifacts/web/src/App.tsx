@@ -21,13 +21,11 @@ import { ProfileEditPage } from "@/pages/profile-edit";
 import { ProfileVerifyPage } from "@/pages/profile-verify";
 import { ProfileAlertsPage } from "@/pages/profile-alerts";
 import { ProfileNotificationsPage } from "@/pages/profile-notifications";
-import { AdminPage } from "@/pages/admin";
 import { HouseholdPage } from "@/pages/household";
-import { EscalationsPage } from "@/pages/escalations";
 import { ActivityPage } from "@/pages/activity";
 import { InvitePage } from "@/pages/invite";
 import { NotificationsPage } from "@/pages/notifications";
-import { ReportsPage } from "@/pages/reports";
+import { ActiveHouseholdProvider } from "@/lib/active-household";
 import { useBillAlerts } from "@/hooks/use-bill-alerts";
 import { useGeoSampler } from "@/hooks/use-geo-suggestions";
 import { useAutoScanOnGmailConnect } from "@/hooks/use-auto-scan-on-gmail-connect";
@@ -230,19 +228,9 @@ function Router() {
           <ScanPage />
         </Protected>
       </Route>
-      <Route path="/admin">
-        <Protected>
-          <AdminPage />
-        </Protected>
-      </Route>
       <Route path="/household">
         <Protected>
           <HouseholdPage />
-        </Protected>
-      </Route>
-      <Route path="/household/escalations">
-        <Protected>
-          <EscalationsPage />
         </Protected>
       </Route>
       <Route path="/activity">
@@ -253,11 +241,6 @@ function Router() {
       <Route path="/notifications">
         <Protected>
           <NotificationsPage />
-        </Protected>
-      </Route>
-      <Route path="/reports">
-        <Protected>
-          <ReportsPage />
         </Protected>
       </Route>
       <Route path="/invite/:token">
@@ -283,13 +266,15 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkAuthTokenBridge />
         <ClerkQueryClientCacheInvalidator />
-        <BillAlertsRunner />
-        <DisplayPrefsProvider>
-          <TooltipProvider>
-            <Router />
-            <Toaster />
-          </TooltipProvider>
-        </DisplayPrefsProvider>
+        <ActiveHouseholdProvider>
+          <BillAlertsRunner />
+          <DisplayPrefsProvider>
+            <TooltipProvider>
+              <Router />
+              <Toaster />
+            </TooltipProvider>
+          </DisplayPrefsProvider>
+        </ActiveHouseholdProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );

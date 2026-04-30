@@ -2,16 +2,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { 
-  useCreateBill, 
-  useUpdateBill, 
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
+import {
+  useCreateBill,
+  useUpdateBill,
   Bill,
   BillCategory,
-  BillStatus
+  BillStatus,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import {
   Form,
   FormControl,
@@ -49,10 +48,11 @@ interface BillFormProps {
 }
 
 export function BillForm({ bill, onSuccess, onCancel }: BillFormProps) {
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const createBill = useCreateBill();
   const updateBill = useUpdateBill();
-  
+
   const isEditing = !!bill;
 
   const form = useForm<BillFormValues>({
@@ -83,23 +83,28 @@ export function BillForm({ bill, onSuccess, onCancel }: BillFormProps) {
   });
 
   const onSubmit = (data: BillFormValues) => {
+    if (householdId == null) return;
     if (isEditing) {
-      updateBill.mutate({ id: bill.id, data }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-          onSuccess?.();
-        }
-      });
+      updateBill.mutate(
+        { householdId, billId: bill.id, data },
+        {
+          onSuccess: () => {
+            invalidate();
+            onSuccess?.();
+          },
+        },
+      );
     } else {
-      createBill.mutate({ data }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-          form.reset();
-          onSuccess?.();
-        }
-      });
+      createBill.mutate(
+        { householdId, data },
+        {
+          onSuccess: () => {
+            invalidate();
+            form.reset();
+            onSuccess?.();
+          },
+        },
+      );
     }
   };
 

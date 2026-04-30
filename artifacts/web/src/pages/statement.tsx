@@ -10,11 +10,11 @@ import {
 import { Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
-import { useListBills, useGetDashboard } from "@workspace/api-client-react";
+import { useBills, useDashboard } from "@/lib/api-hooks";
 
 export function StatementPage() {
-  const { data: bills = [] } = useListBills();
-  const { data: dashboard } = useGetDashboard();
+  const { data: bills = [] } = useBills();
+  const { data: dashboard } = useDashboard();
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
 
   const monthStart = startOfMonth(cursor);

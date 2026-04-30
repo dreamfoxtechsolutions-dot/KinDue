@@ -14,7 +14,8 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useListBills, type Bill } from "@workspace/api-client-react";
+import { type Bill } from "@workspace/api-client-react";
+import { useBills } from "@/lib/api-hooks";
 import { BillDetailSheet } from "./bill-detail-sheet";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { BillForm } from "./bill-form";
@@ -34,7 +35,7 @@ function riskDotClass(level: Bill["riskLevel"]): string {
 }
 
 export function BillCalendar() {
-  const { data: bills = [] } = useListBills();
+  const { data: bills = [] } = useBills();
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);

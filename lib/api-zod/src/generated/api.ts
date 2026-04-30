@@ -1284,6 +1284,47 @@ export const ScanGmailResponse = zod.object({
 });
 
 /**
+ * @summary Partially update a subscription
+ */
+export const UpdateSubscriptionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSubscriptionBody = zod
+  .object({
+    name: zod.string().optional(),
+    provider: zod.string().nullish(),
+    amount: zod.number().optional(),
+    billingCycle: zod
+      .enum(["weekly", "monthly", "quarterly", "annual"])
+      .optional(),
+    serviceLocationLabel: zod.string().nullish(),
+    status: zod.enum(["active", "paused", "cancelled"]).optional(),
+    cancelUrl: zod.string().nullish(),
+    cancelPhone: zod.string().nullish(),
+    cancelEmail: zod.string().nullish(),
+    dismissed: zod.boolean().optional(),
+  })
+  .describe("Partial update — all fields optional.");
+
+export const UpdateSubscriptionResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  name: zod.string(),
+  provider: zod.string().nullish(),
+  amount: zod.number(),
+  billingCycle: zod.enum(["weekly", "monthly", "quarterly", "annual"]),
+  serviceLocationLabel: zod.string().nullish(),
+  status: zod.enum(["active", "paused", "cancelled"]),
+  cancelUrl: zod.string().nullish(),
+  cancelPhone: zod.string().nullish(),
+  cancelEmail: zod.string().nullish(),
+  dismissed: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
  * @summary Dismiss / delete a subscription
  */
 export const DeleteSubscriptionParams = zod.object({

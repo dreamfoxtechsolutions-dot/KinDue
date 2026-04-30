@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
-import { useListBills } from "@workspace/api-client-react";
+import { useBills } from "@/lib/api-hooks";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 
 export type AlertSettings = {
@@ -89,7 +89,7 @@ function fireNotification(bill: Bill, leadDay: number) {
 
 export function useBillAlerts() {
   const { user, isLoaded } = useUser();
-  const { data } = useListBills();
+  const { data } = useBills();
   const seenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {

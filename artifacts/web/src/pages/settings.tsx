@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
-import { useAdminWhoami } from "@workspace/api-client-react";
 import {
   ChevronDown,
   ChevronRight,
@@ -169,8 +168,6 @@ export function SettingsPage() {
   const { signOut } = clerk;
   const [, setLocation] = useLocation();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const { data: whoami } = useAdminWhoami();
-  const isAdmin = whoami?.isAdmin === true;
 
   const initials =
     ((user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "")).trim() ||
@@ -326,33 +323,6 @@ export function SettingsPage() {
           </section>
           );
         })}
-
-        {isAdmin && (
-          <section className="space-y-2">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-medium px-1">
-              Admin
-            </p>
-            <ul className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
-              <li>
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
-                >
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <ShieldCheck className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">Admin overview</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Tools available to Kindue administrators
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </Link>
-              </li>
-            </ul>
-          </section>
-        )}
 
         <Button
           variant="outline"

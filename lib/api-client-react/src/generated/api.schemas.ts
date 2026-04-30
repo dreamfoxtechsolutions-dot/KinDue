@@ -562,6 +562,46 @@ export interface Subscription {
   updatedAt: string;
 }
 
+export type UpdateSubscriptionBodyBillingCycle =
+  (typeof UpdateSubscriptionBodyBillingCycle)[keyof typeof UpdateSubscriptionBodyBillingCycle];
+
+export const UpdateSubscriptionBodyBillingCycle = {
+  weekly: "weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  annual: "annual",
+} as const;
+
+export type UpdateSubscriptionBodyStatus =
+  (typeof UpdateSubscriptionBodyStatus)[keyof typeof UpdateSubscriptionBodyStatus];
+
+export const UpdateSubscriptionBodyStatus = {
+  active: "active",
+  paused: "paused",
+  cancelled: "cancelled",
+} as const;
+
+/**
+ * Partial update — all fields optional.
+ */
+export interface UpdateSubscriptionBody {
+  name?: string;
+  /** @nullable */
+  provider?: string | null;
+  amount?: number;
+  billingCycle?: UpdateSubscriptionBodyBillingCycle;
+  /** @nullable */
+  serviceLocationLabel?: string | null;
+  status?: UpdateSubscriptionBodyStatus;
+  /** @nullable */
+  cancelUrl?: string | null;
+  /** @nullable */
+  cancelPhone?: string | null;
+  /** @nullable */
+  cancelEmail?: string | null;
+  dismissed?: boolean;
+}
+
 export type CreateSubscriptionBodyBillingCycle =
   (typeof CreateSubscriptionBodyBillingCycle)[keyof typeof CreateSubscriptionBodyBillingCycle];
 

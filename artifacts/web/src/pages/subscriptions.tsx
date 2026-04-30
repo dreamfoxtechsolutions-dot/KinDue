@@ -11,11 +11,24 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useListSubscriptions,
   useScanGmail,
-  useGetCancelInfo,
   useUpdateSubscription,
   useDeleteSubscription,
 } from "@workspace/api-client-react";
-import type { Subscription, CancelInfo } from "@workspace/api-client-react";
+import type { Subscription } from "@workspace/api-client-react";
+import { useActiveHousehold } from "@/lib/active-household";
+
+// TODO: backend not implemented — `/subscriptions/:id/cancel-info` doesn't
+// exist on the real API. Until it lands, the cancel drawer relies entirely
+// on the static fields the subscription itself carries (cancelUrl,
+// cancelPhone, cancelEmail, notes). This local type mirrors what that
+// endpoint used to return so the existing UI shape is preserved.
+type CancelInfo = {
+  url?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  tips?: string[];
+};
 import {
   Mail,
   ScanLine,
@@ -64,16 +77,31 @@ function CancelDrawer({
   const { toast } = useToast();
   const [info, setInfo] = useState<CancelInfo | null>(null);
 
-  const getCancelInfo = useGetCancelInfo({
-    mutation: {
-      onSuccess: (data) => setInfo(data),
-      onError: () =>
-        toast({ title: "Could not fetch cancel info", variant: "destructive" }),
+  // TODO: backend not implemented — fall back to whatever the subscription
+  // itself carries. Once `/subscriptions/:id/cancel-info` ships, swap this
+  // local stub for the real generated mutation.
+  const getCancelInfo = {
+    isPending: false,
+    mutate: () => {
+      const fallback: CancelInfo = {
+        url: subscription.cancelUrl ?? null,
+        phone: subscription.cancelPhone ?? null,
+        email: subscription.cancelEmail ?? null,
+      };
+      const hasAnything = fallback.url || fallback.phone || fallback.email;
+      setInfo(hasAnything ? fallback : null);
+      if (!hasAnything) {
+        toast({
+          title: "No saved cancel info",
+          description:
+            "We don't have contact details for this subscription yet. Try the provider's website.",
+        });
+      }
     },
-  });
+  };
 
   const handleFetch = () => {
-    getCancelInfo.mutate({ id: subscription.id });
+    getCancelInfo.mutate();
   };
 
   const copy = (text: string, label: string) => {
@@ -427,6 +455,7 @@ function SubscriptionCard({
 export function SubscriptionsPage() {
   const { toast } = useToast();
   const { user } = useUser();
+  const { householdId } = useActiveHousehold();
   const [cancelTarget, setCancelTarget] = useState<Subscription | null>(null);
 
   const {
@@ -505,8 +534,10 @@ export function SubscriptionsPage() {
             </p>
           </div>
           <Button
-            onClick={() => scanGmail.mutate()}
-            disabled={scanGmail.isPending}
+            onClick={() =>
+              householdId != null && scanGmail.mutate({ householdId })
+            }
+            disabled={scanGmail.isPending || householdId == null}
             className="shrink-0 gap-2 h-10 px-5 shadow-sm"
           >
             {scanGmail.isPending ? (
@@ -643,13 +674,20 @@ export function SubscriptionsPage() {
                 onDelete={() => deleteSub.mutate({ id: sub.id })}
                 onCancel={() => setCancelTarget(sub)}
                 onUpdateLocation={(lat, lng, label) =>
+                  // TODO: backend not implemented — `serviceLat`,
+                  // `serviceLng`, and `lastNearVisitAt` aren't on the
+                  // canonical UpdateSubscriptionBody schema yet. The
+                  // request will be rejected until the geo presence
+                  // backend lands.
                   updateSub.mutate({
                     id: sub.id,
                     data: {
-                      serviceLat: lat,
-                      serviceLng: lng,
                       serviceLocationLabel: label,
-                      lastNearVisitAt: new Date().toISOString(),
+                      ...({
+                        serviceLat: lat,
+                        serviceLng: lng,
+                        lastNearVisitAt: new Date().toISOString(),
+                      } as object),
                     },
                   })
                 }
@@ -657,17 +695,23 @@ export function SubscriptionsPage() {
                   updateSub.mutate({
                     id: sub.id,
                     data: {
-                      serviceLat: null,
-                      serviceLng: null,
                       serviceLocationLabel: "",
-                      lastNearVisitAt: null,
+                      ...({
+                        serviceLat: null,
+                        serviceLng: null,
+                        lastNearVisitAt: null,
+                      } as object),
                     },
                   })
                 }
                 onMarkVisited={() =>
                   updateSub.mutate({
                     id: sub.id,
-                    data: { lastNearVisitAt: new Date().toISOString() },
+                    data: {
+                      ...({
+                        lastNearVisitAt: new Date().toISOString(),
+                      } as object),
+                    },
                   })
                 }
                 awayDays={awayMap.get(sub.id)}

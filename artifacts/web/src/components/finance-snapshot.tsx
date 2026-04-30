@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGetDashboard } from "@workspace/api-client-react";
+import { useDashboard } from "@/lib/api-hooks";
 import { useToast } from "@/hooks/use-toast";
 
 type LinkedInstitution = { id: string; connectedAt: string };
@@ -31,7 +31,7 @@ function formatCurrency(n: number) {
 
 export function FinanceSnapshot() {
   const { user, isLoaded } = useUser();
-  const { data: summary } = useGetDashboard();
+  const { data: summary } = useDashboard();
   const { toast } = useToast();
 
   const [recurringIncome, setRecurringIncome] = useState(0);

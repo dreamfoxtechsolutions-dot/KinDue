@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { 
-  useListBills, 
-  useUpdateBill, 
-  useDeleteBill, 
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
-  BillStatus
+import {
+  useUpdateBill,
+  useDeleteBill,
+  BillStatus,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useBills, useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import { useHouseholdMe } from "@/hooks/use-household";
 import { can } from "@/lib/household-api";
 import { 
@@ -42,8 +40,9 @@ export function BillList({
   openBillId?: number | null;
   onOpenedBill?: (id: number) => void;
 } = {}) {
-  const queryClient = useQueryClient();
-  const { data: bills, isLoading } = useListBills();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
+  const { data: bills, isLoading } = useBills();
   const updateBill = useUpdateBill();
   const deleteBill = useDeleteBill();
   const household = useHouseholdMe().data;
@@ -85,23 +84,28 @@ export function BillList({
   }
 
   const markAsPaid = (id: number) => {
-    updateBill.mutate({ id, data: { status: BillStatus.paid } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-      }
-    });
+    if (householdId == null) return;
+    updateBill.mutate(
+      { householdId, billId: id, data: { status: BillStatus.paid } },
+      {
+        onSuccess: () => {
+          invalidate();
+        },
+      },
+    );
   };
 
   const confirmDelete = () => {
-    if (!deletingBillId) return;
-    deleteBill.mutate({ id: deletingBillId }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-        setDeletingBillId(null);
-      }
-    });
+    if (!deletingBillId || householdId == null) return;
+    deleteBill.mutate(
+      { householdId, billId: deletingBillId },
+      {
+        onSuccess: () => {
+          invalidate();
+          setDeletingBillId(null);
+        },
+      },
+    );
   };
 
   const editingBill = bills.find(b => b.id === editingBillId);

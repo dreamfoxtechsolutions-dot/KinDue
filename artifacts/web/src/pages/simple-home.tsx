@@ -2,16 +2,14 @@ import { useMemo, useState } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { useLocation, Link } from "wouter";
 import {
-  useListBills,
   useUpdateBill,
   useListSubscriptions,
-  getListBillsQueryKey,
-  getGetDashboardQueryKey,
   BillStatus,
   type Bill,
   type Subscription,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useBills, useInvalidateHouseholdData } from "@/lib/api-hooks";
+import { useActiveHousehold } from "@/lib/active-household";
 import {
   Shield,
   Check,
@@ -51,7 +49,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/inline-error";
-import { PaymentPlanner } from "@/components/payment-planner";
 import { WellnessCheckinCard } from "@/components/wellness-checkin-card";
 import { ViewOnlyNotice } from "@/components/view-only-notice";
 import { useScanCapability } from "@/hooks/use-scan-capability";
@@ -77,12 +74,23 @@ function daysFromToday(dueDateIso: string): number {
 // subscriptions without any location are skipped (we have no signal).
 const STALE_VISIT_DAYS = 60;
 
+// Note: serviceLat/serviceLng/lastNearVisitAt aren't on the canonical
+// Subscription schema today. Until the geo presence backend lands we
+// keep the predicate but it'll always return false.
+type SubscriptionWithGeo = Subscription & {
+  serviceLat?: number | null;
+  serviceLng?: number | null;
+  lastNearVisitAt?: string | null;
+  emailSender?: string | null;
+};
+
 function isCriticalSubscription(sub: Subscription): boolean {
+  const s = sub as SubscriptionWithGeo;
   const hasLocation =
-    typeof sub.serviceLat === "number" && typeof sub.serviceLng === "number";
+    typeof s.serviceLat === "number" && typeof s.serviceLng === "number";
   if (!hasLocation) return false;
-  if (!sub.lastNearVisitAt) return true;
-  const last = new Date(sub.lastNearVisitAt).getTime();
+  if (!s.lastNearVisitAt) return true;
+  const last = new Date(s.lastNearVisitAt).getTime();
   if (Number.isNaN(last)) return true;
   const daysSince = (Date.now() - last) / 86_400_000;
   return daysSince > STALE_VISIT_DAYS;
@@ -107,7 +115,8 @@ export function SimpleHome() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
+  const { householdId } = useActiveHousehold();
+  const invalidate = useInvalidateHouseholdData();
   const { toast } = useToast();
 
   const {
@@ -116,7 +125,7 @@ export function SimpleHome() {
     isError: billsError,
     isFetching: billsFetching,
     refetch: refetchBills,
-  } = useListBills();
+  } = useBills();
   const {
     data: subscriptions,
     isError: subsError,
@@ -154,15 +163,13 @@ export function SimpleHome() {
   );
 
   const markPaid = (id: number) => {
+    if (householdId == null) return;
     setPendingPaidId(id);
     updateBill.mutate(
-      { id, data: { status: BillStatus.paid } },
+      { householdId, billId: id, data: { status: BillStatus.paid } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
-          queryClient.invalidateQueries({
-            queryKey: getGetDashboardQueryKey(),
-          });
+          invalidate();
           toast({ title: "Marked as paid" });
           setPendingPaidId(null);
         },
@@ -265,12 +272,6 @@ export function SimpleHome() {
                 onView={() => setSubsOpen(true)}
               />
             )}
-            <div className="rounded-md border border-border/70 bg-card/60 p-4">
-              <p className="text-xs font-medium text-muted-foreground mb-2 px-0.5">
-                Payment planner
-              </p>
-              <PaymentPlanner />
-            </div>
           </div>
         </section>
 
@@ -457,7 +458,9 @@ function SubscriptionRow({ subscription }: { subscription: Subscription }) {
           {subscription.billingCycle
             ? `${subscription.billingCycle} · `
             : ""}
-          {subscription.provider || subscription.emailSender || "Unknown source"}
+          {subscription.provider ||
+            (subscription as SubscriptionWithGeo).emailSender ||
+            "Unknown source"}
         </p>
         {subscription.serviceLocationLabel && (
           <p className="text-[11px] text-muted-foreground mt-1 inline-flex items-center gap-1">
@@ -478,11 +481,12 @@ function SubscriptionRow({ subscription }: { subscription: Subscription }) {
 
 function whyCritical(sub: Subscription): string | null {
   if (!isCriticalSubscription(sub)) return null;
-  if (!sub.lastNearVisitAt) {
+  const s = sub as SubscriptionWithGeo;
+  if (!s.lastNearVisitAt) {
     return "We've never tracked you near this service location.";
   }
   const days = Math.floor(
-    (Date.now() - new Date(sub.lastNearVisitAt).getTime()) / 86_400_000,
+    (Date.now() - new Date(s.lastNearVisitAt).getTime()) / 86_400_000,
   );
   return `No visits near here in ${days} days.`;
 }

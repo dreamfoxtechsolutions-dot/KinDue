@@ -57,6 +57,7 @@ import type {
   UpdateHouseholdBody,
   UpdateMemberBody,
   UpdateNotificationSettingsBody,
+  UpdateSubscriptionBody,
   UpdateUserBody,
   UploadDocumentBody,
   User,
@@ -3862,6 +3863,93 @@ export const useScanGmail = <
   TContext
 > => {
   return useMutation(getScanGmailMutationOptions(options));
+};
+
+/**
+ * @summary Partially update a subscription
+ */
+export const getUpdateSubscriptionUrl = (id: number) => {
+  return `/api/subscriptions/${id}`;
+};
+
+export const updateSubscription = async (
+  id: number,
+  updateSubscriptionBody: UpdateSubscriptionBody,
+  options?: RequestInit,
+): Promise<Subscription> => {
+  return customFetch<Subscription>(getUpdateSubscriptionUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSubscriptionBody),
+  });
+};
+
+export const getUpdateSubscriptionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubscription>>,
+    TError,
+    { id: number; data: BodyType<UpdateSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSubscription>>,
+  TError,
+  { id: number; data: BodyType<UpdateSubscriptionBody> },
+  TContext
+> => {
+  const mutationKey = ["updateSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSubscription>>,
+    { id: number; data: BodyType<UpdateSubscriptionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateSubscription(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSubscription>>
+>;
+export type UpdateSubscriptionMutationBody = BodyType<UpdateSubscriptionBody>;
+export type UpdateSubscriptionMutationError = ErrorType<void>;
+
+/**
+ * @summary Partially update a subscription
+ */
+export const useUpdateSubscription = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubscription>>,
+    TError,
+    { id: number; data: BodyType<UpdateSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSubscription>>,
+  TError,
+  { id: number; data: BodyType<UpdateSubscriptionBody> },
+  TContext
+> => {
+  return useMutation(getUpdateSubscriptionMutationOptions(options));
 };
 
 /**

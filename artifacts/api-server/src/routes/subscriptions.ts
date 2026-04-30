@@ -105,6 +105,118 @@ router.post("/subscriptions/scan-gmail", requireAuth, async (req, res) => {
   res.json({ found: 0, newlyAdded: 0 });
 });
 
+router.patch("/subscriptions/:id", requireAuth, async (req, res) => {
+  const user = req.dbUser!;
+  const id = parseInt(String(req.params["id"]));
+
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: "Invalid subscription id" });
+    return;
+  }
+
+  const existing = await db.query.subscriptionsTable.findFirst({
+    where: and(
+      eq(subscriptionsTable.id, id),
+      eq(subscriptionsTable.userId, user.id),
+    ),
+  });
+  if (!existing) {
+    res.status(404).json({ error: "Subscription not found" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as {
+    name?: unknown;
+    provider?: unknown;
+    amount?: unknown;
+    billingCycle?: unknown;
+    serviceLocationLabel?: unknown;
+    status?: unknown;
+    cancelUrl?: unknown;
+    cancelPhone?: unknown;
+    cancelEmail?: unknown;
+    dismissed?: unknown;
+  };
+
+  const optStr = (v: unknown): string | null | undefined => {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    if (typeof v !== "string") return undefined;
+    const t = v.trim();
+    return t.length === 0 ? null : t;
+  };
+
+  const patch: Partial<typeof subscriptionsTable.$inferInsert> = {};
+
+  if (typeof body.name === "string" && body.name.trim()) {
+    patch.name = body.name.trim();
+  }
+
+  const provider = optStr(body.provider);
+  if (provider !== undefined) patch.provider = provider;
+
+  if (body.amount !== undefined) {
+    const n =
+      typeof body.amount === "number"
+        ? body.amount
+        : typeof body.amount === "string"
+          ? Number(body.amount)
+          : NaN;
+    if (!Number.isFinite(n) || n < 0) {
+      res
+        .status(400)
+        .json({ error: "amount must be a non-negative number" });
+      return;
+    }
+    patch.amount = n.toFixed(2);
+  }
+
+  const allowedCycles = ["weekly", "monthly", "quarterly", "annual"] as const;
+  if (
+    typeof body.billingCycle === "string" &&
+    (allowedCycles as readonly string[]).includes(body.billingCycle)
+  ) {
+    patch.billingCycle = body.billingCycle as (typeof allowedCycles)[number];
+  }
+
+  const allowedStatus = ["active", "paused", "cancelled"] as const;
+  if (
+    typeof body.status === "string" &&
+    (allowedStatus as readonly string[]).includes(body.status)
+  ) {
+    patch.status = body.status as (typeof allowedStatus)[number];
+  }
+
+  const loc = optStr(body.serviceLocationLabel);
+  if (loc !== undefined) patch.serviceLocationLabel = loc;
+
+  const cu = optStr(body.cancelUrl);
+  if (cu !== undefined) patch.cancelUrl = cu;
+  const cp = optStr(body.cancelPhone);
+  if (cp !== undefined) patch.cancelPhone = cp;
+  const ce = optStr(body.cancelEmail);
+  if (ce !== undefined) patch.cancelEmail = ce;
+
+  if (typeof body.dismissed === "boolean") patch.dismissed = body.dismissed;
+
+  if (Object.keys(patch).length === 0) {
+    res.json(serialize(existing));
+    return;
+  }
+
+  patch.updatedAt = new Date();
+
+  const [row] = await db
+    .update(subscriptionsTable)
+    .set(patch)
+    .where(
+      and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.userId, user.id)),
+    )
+    .returning();
+
+  res.json(serialize(row));
+});
+
 router.delete("/subscriptions/:id", requireAuth, async (req, res) => {
   const user = req.dbUser!;
   const id = parseInt(String(req.params["id"]));

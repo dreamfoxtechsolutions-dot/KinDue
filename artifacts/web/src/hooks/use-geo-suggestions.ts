@@ -1,15 +1,6 @@
-import { useEffect, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
-import { useListSubscriptions, updateSubscription } from "@workspace/api-client-react";
 import { differenceInCalendarDays, parseISO } from "date-fns";
-import { getAlertSettings } from "@/hooks/use-bill-alerts";
-import { useHouseholdMe, HOUSEHOLD_ME_KEY } from "@/hooks/use-household";
-import { householdApi } from "@/lib/household-api";
 
 const NEAR_VISIT_RADIUS_KM = 2;
-const SAMPLE_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const SAMPLE_KEY = "bg:geo:lastSampleAt";
 
 export type GeoPoint = { lat: number; lng: number };
 
@@ -58,101 +49,18 @@ export async function queryGeoPermission(): Promise<PermissionState | "unknown">
   }
 }
 
-type Sub = {
-  id: number;
-  serviceLat: number | null;
-  serviceLng: number | null;
-  lastNearVisitAt: string | null;
-  dismissed: boolean;
-  status: string;
-};
-
 /**
- * Background geo sampler. Runs (at most) every 6 hours while the app is open
- * and the user has opted in. For each subscription with a tagged location, if
- * the user is within NEAR_VISIT_RADIUS_KM, stamps lastNearVisitAt = now.
+ * Background geo sampler.
+ *
+ * TODO: backend not implemented — the real Subscription schema has no
+ * `serviceLat` / `serviceLng` / `lastNearVisitAt` columns yet, and
+ * there's no wellness-checkin endpoint. The previous implementation
+ * patched both via fictitious endpoints. Until the geo presence
+ * backend lands this is a no-op so the App.tsx mount point doesn't
+ * break.
  */
-export function useGeoSampler() {
-  const { user, isLoaded } = useUser();
-  const { data } = useListSubscriptions();
-  const { data: householdMe } = useHouseholdMe();
-  const queryClient = useQueryClient();
-  const ranRef = useRef(false);
-
-  useEffect(() => {
-    if (!isLoaded || !user || !data) return;
-    if (ranRef.current) return;
-
-    const settings = getAlertSettings(
-      user.unsafeMetadata as Record<string, unknown>,
-    );
-    if (!settings.geoEnabled) return;
-    if (typeof window === "undefined" || !("geolocation" in navigator)) return;
-
-    let last = 0;
-    try {
-      last = Number(localStorage.getItem(SAMPLE_KEY) ?? 0);
-    } catch {
-      /* ignore */
-    }
-    if (Date.now() - last < SAMPLE_INTERVAL_MS) return;
-
-    ranRef.current = true;
-    (async () => {
-      const here = await getCurrentPosition();
-      if (!here) {
-        ranRef.current = false;
-        return;
-      }
-      try {
-        localStorage.setItem(SAMPLE_KEY, String(Date.now()));
-      } catch {
-        /* ignore */
-      }
-      const subs = data as unknown as Sub[];
-      if (!Array.isArray(subs)) return;
-
-      for (const s of subs) {
-        if (s.dismissed) continue;
-        if (s.status !== "active") continue;
-        if (typeof s.serviceLat !== "number" || typeof s.serviceLng !== "number")
-          continue;
-        const km = haversineKm(here, { lat: s.serviceLat, lng: s.serviceLng });
-        if (km <= NEAR_VISIT_RADIUS_KM) {
-          try {
-            await updateSubscription(s.id, {
-              lastNearVisitAt: new Date().toISOString(),
-            });
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-
-      // Wellness check-in: if the household tracks a parent / dependent
-      // and we know their home coords, stamp lastVisitedCaregiverAt
-      // when the caregiver is physically near. This drives the "you
-      // haven't visited Mom in X days" card on Home.
-      const homeLat = householdMe?.household.caregiverHomeLat;
-      const homeLng = householdMe?.household.caregiverHomeLng;
-      if (
-        householdMe &&
-        householdMe.me.role !== "alerts_only" &&
-        typeof homeLat === "number" &&
-        typeof homeLng === "number"
-      ) {
-        const km = haversineKm(here, { lat: homeLat, lng: homeLng });
-        if (km <= NEAR_VISIT_RADIUS_KM) {
-          try {
-            await householdApi.recordWellnessCheckin({ kind: "visited" });
-            queryClient.invalidateQueries({ queryKey: HOUSEHOLD_ME_KEY });
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-    })();
-  }, [isLoaded, user, data, householdMe, queryClient]);
+export function useGeoSampler(): void {
+  // intentionally empty
 }
 
 export type GeoSuggestion = {

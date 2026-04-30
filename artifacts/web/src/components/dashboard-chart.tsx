@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { useGetDashboard, useListBills } from "@workspace/api-client-react";
+import { useDashboard, useBills } from "@/lib/api-hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet, ShieldAlert, TrendingDown, CalendarClock } from "lucide-react";
 import type { ReactNode } from "react";
@@ -50,8 +50,8 @@ function KpiRow({
 }
 
 export function DashboardChart() {
-  const { data: summary, isLoading } = useGetDashboard();
-  const { data: bills = [] } = useListBills();
+  const { data: summary, isLoading } = useDashboard();
+  const { data: bills = [] } = useBills();
 
   const slices = useMemo<Slice[]>(() => {
     if (!summary) return [];
