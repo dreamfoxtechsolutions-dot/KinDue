@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
@@ -6,49 +6,75 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Eye,
+  FileText,
   Loader2,
   Lock,
   Shield,
+  ShieldCheck,
   Star,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { householdApi } from "@/lib/household-api";
+import { householdApi, type HouseholdRole } from "@/lib/household-api";
 import { HOUSEHOLD_ME_KEY } from "@/hooks/use-household";
 import { cn } from "@/lib/utils";
 
-type Choice = "for_someone" | "with_someone" | "just_me";
-// "full" is intentionally not selectable yet — bank linking isn't built.
-// We keep the type literal for forward-compat but the UI only ever lets the
-// user pick "view_only" today.
 type StartMode = "view_only" | "full";
 
-const CHOICES: {
-  value: Choice;
+// The four roles available in Kindue, presented as onboarding choices.
+// Descriptions are written for someone who has not yet joined a household
+// — they explain what the role will let them do, not what they are.
+const ROLE_OPTIONS: {
+  role: HouseholdRole;
   label: string;
-  hint: string;
+  icon: React.ElementType;
+  tagline: string;
+  description: string;
   recommended?: boolean;
+  requiresVerification?: boolean;
 }[] = [
   {
-    value: "for_someone",
-    label: "Someone I care for",
-    hint: "I'm the caregiver helping a parent or relative stay current.",
+    role: "primary_user",
+    label: "Primary User",
+    icon: UserCog,
+    tagline: "Full account ownership",
+    description:
+      "You own the household account and have complete control over bills, documents, members, and settings. All other roles report up to you. Choose this if you're setting up the account for yourself or a loved one you're solely responsible for.",
     recommended: true,
   },
   {
-    value: "with_someone",
-    label: "Another family member",
-    hint: "Spouse, sibling, partner, or other relative I'm helping.",
+    role: "trustee",
+    label: "Trustee",
+    icon: ShieldCheck,
+    tagline: "Elevated shared access",
+    description:
+      "You share full management access alongside the Primary User — you can approve bills, manage members, and view sensitive documents. Because Trustees can access protected health-adjacent financial records, this role requires HIPAA identity verification before it becomes active.",
+    requiresVerification: true,
   },
   {
-    value: "just_me",
-    label: "Just myself",
-    hint: "I'll keep track of my own bills.",
+    role: "caregiver",
+    label: "Caregiver",
+    icon: Users,
+    tagline: "Day-to-day assistance",
+    description:
+      "You can view bills, mark them paid, add notes, and scan email for new bills. You cannot manage household members, access legal/medical documents, or change account settings. Best for a professional caregiver or a family member with a helping role.",
+  },
+  {
+    role: "other",
+    label: "Other",
+    icon: Eye,
+    tagline: "View-only access",
+    description:
+      "You can see what's happening in the household — bills, status, recent activity — but cannot take actions or access sensitive records. Good for a family member who wants to stay informed without being responsible.",
   },
 ];
+
+// Steps: 1 = why, 2 = role select, 3 = verify (trustee only) | how (others)
+type Step = 1 | 2 | 3;
 
 export function OnboardingWizard({
   open,
@@ -59,43 +85,26 @@ export function OnboardingWizard({
   defaultName: string;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [choice, setChoice] = useState<Choice>("for_someone");
-  // Always start blank so the placeholder shows and the user types
-  // the actual person's name. We deliberately don't seed any default
-  // (e.g. "Mom") — it framed the app around a single relationship.
-  const [caregiverFor, setCaregiverFor] = useState("");
-  // Locked to view_only today; see StartMode type above.
+  const [step, setStep] = useState<Step>(1);
+  const [selectedRole, setSelectedRole] = useState<HouseholdRole>("primary_user");
   const [startMode] = useState<StartMode>("view_only");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useUser();
   const [, setLocation] = useLocation();
 
-  // Clear the name field when the user switches to "just_me" since
-  // it's not relevant there. Otherwise leave whatever they typed in.
-  useEffect(() => {
-    if (choice === "just_me") {
-      setCaregiverFor("");
-    }
-  }, [choice]);
-
   const persistChoice = useMutation({
     mutationFn: () =>
       householdApi.setOnboarding({
-        choice,
-        caregiverFor:
-          choice === "for_someone" || choice === "with_someone"
-            ? caregiverFor.trim() || undefined
-            : undefined,
+        choice:
+          selectedRole === "primary_user"
+            ? "just_me"
+            : selectedRole === "caregiver"
+              ? "for_someone"
+              : "with_someone",
+        caregiverFor: undefined,
         householdName: defaultName,
       }),
-    // Note: we do *not* auto-flip the caregiver's display prefs (font
-    // scale, reduced motion) to "senior" just because they picked
-    // for_someone. The caregiver isn't the senior — their parent is,
-    // and the parent isn't even a user account in this app. The
-    // accessibility toggles live on the Settings → Accessibility page
-    // for the caregiver to opt in if they personally want them.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HOUSEHOLD_ME_KEY });
     },
@@ -107,13 +116,15 @@ export function OnboardingWizard({
       }),
   });
 
-  const markWizardSeen = async () => {
+  const markWizardSeen = async (extra?: Record<string, unknown>) => {
     try {
       if (user) {
         await user.update({
           unsafeMetadata: {
             ...(user.unsafeMetadata ?? {}),
             onboardingWizardSeenAt: new Date().toISOString(),
+            onboardingRole: selectedRole,
+            ...extra,
           },
         });
       }
@@ -135,14 +146,20 @@ export function OnboardingWizard({
     }
   };
 
+  const handleVerificationSubmit = async () => {
+    await markWizardSeen({
+      trusteeVerificationStatus: "pending_hipaa",
+      trusteeVerificationRequestedAt: new Date().toISOString(),
+    });
+    onClose();
+  };
+
   const finish = async (action: "view_only" | "skip") => {
     if (persistChoice.isSuccess || action === "skip") {
       await markWizardSeen();
     }
     onClose();
-    if (action === "skip") {
-      return;
-    }
+    if (action === "skip") return;
     setLocation("/scan");
   };
 
@@ -150,30 +167,37 @@ export function OnboardingWizard({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          void finish("skip");
-        }
+        if (!next) void finish("skip");
       }}
     >
       <DialogContent
-        className="w-[calc(100%-2rem)] sm:max-w-[480px] max-h-[90vh] overflow-y-auto p-0"
+        className="w-[calc(100%-2rem)] sm:max-w-[500px] max-h-[90vh] overflow-y-auto p-0"
         onInteractOutside={(e) => e.preventDefault()}
       >
         {step === 1 && <StepWhy onNext={() => setStep(2)} />}
+
         {step === 2 && (
           <StepWho
-            choice={choice}
-            setChoice={setChoice}
-            caregiverFor={caregiverFor}
-            setCaregiverFor={setCaregiverFor}
+            selectedRole={selectedRole}
+            setSelectedRole={setSelectedRole}
             onBack={() => setStep(1)}
             onNext={handleStep2Continue}
             isPending={persistChoice.isPending}
           />
         )}
-        {step === 3 && (
+
+        {step === 3 && selectedRole === "trustee" && (
+          <StepVerify
+            onBack={() => setStep(2)}
+            onSubmit={handleVerificationSubmit}
+            onChooseDifferent={() => setStep(2)}
+          />
+        )}
+
+        {step === 3 && selectedRole !== "trustee" && (
           <StepHow
             startMode={startMode}
+            selectedRole={selectedRole}
             onBack={() => setStep(2)}
             onPrimary={() => finish("view_only")}
             onSkip={() => finish("skip")}
@@ -184,10 +208,10 @@ export function OnboardingWizard({
   );
 }
 
-function StepDots({ active }: { active: 1 | 2 | 3 }) {
+function StepDots({ active, total = 3 }: { active: number; total?: number }) {
   return (
     <div className="flex gap-1.5" aria-hidden="true">
-      {[1, 2, 3].map((n) => (
+      {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
         <div
           key={n}
           className={cn(
@@ -208,19 +232,14 @@ function StepWhy({ onNext }: { onNext: () => void }) {
         <span className="text-lg font-bold tracking-tight">Kindue</span>
       </div>
       <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
-        This account is for your loved one — you'll be their Primary user.
+        Welcome — let's set up your household.
       </h1>
       <p className="text-base text-muted-foreground leading-relaxed">
-        Kindue treats the account as theirs. As Primary user you have full
-        power to help with their bills, vault, and reminders. You can invite
-        Family members and Caregivers later with limited access.
+        Kindue organises bills and financial records for a household, then lets you share
+        access with family members and caregivers — each with the right level of
+        visibility.
       </p>
       <div className="space-y-3 mt-2">
-        {/* Promises kept truthful: every line below corresponds to a
-            real product behavior. We deliberately removed the
-            previous "free for 30 days" CTA (no paid plan exists) and
-            the "Trusted by family caregivers since 2024" line
-            (invented social proof). */}
         {[
           "Read-only by default — you stay in control",
           "Encrypted at rest, only visible to your caregiver circle",
@@ -246,23 +265,20 @@ function StepWhy({ onNext }: { onNext: () => void }) {
 }
 
 function StepWho({
-  choice,
-  setChoice,
-  caregiverFor,
-  setCaregiverFor,
+  selectedRole,
+  setSelectedRole,
   onBack,
   onNext,
   isPending,
 }: {
-  choice: Choice;
-  setChoice: (c: Choice) => void;
-  caregiverFor: string;
-  setCaregiverFor: (v: string) => void;
+  selectedRole: HouseholdRole;
+  setSelectedRole: (r: HouseholdRole) => void;
   onBack: () => void;
   onNext: () => void;
   isPending: boolean;
 }) {
-  const showName = choice !== "just_me";
+  const selected = ROLE_OPTIONS.find((o) => o.role === selectedRole)!;
+
   return (
     <div className="px-6 pt-8 pb-6 flex flex-col gap-5">
       <div className="flex items-center justify-between">
@@ -280,82 +296,108 @@ function StepWho({
 
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
-          Who are you helping?
+          What is your role?
         </h1>
         <p className="text-base text-muted-foreground mt-2">
-          We'll set up a private space for them. You can invite siblings later.
+          Choose the role that describes how you'll use this household account.
         </p>
       </div>
 
-      <div className="space-y-3" role="radiogroup" aria-label="Who you're helping">
-        {CHOICES.map((c) => {
-          const selected = choice === c.value;
+      <div className="space-y-2.5" role="radiogroup" aria-label="Your role">
+        {ROLE_OPTIONS.map((opt) => {
+          const isSelected = selectedRole === opt.role;
+          const Icon = opt.icon;
           return (
             <button
-              key={c.value}
+              key={opt.role}
               type="button"
               role="radio"
-              aria-checked={selected}
-              onClick={() => setChoice(c.value)}
+              aria-checked={isSelected}
+              onClick={() => setSelectedRole(opt.role)}
               className={cn(
-                "w-full text-left p-4 rounded-2xl border-2 flex items-start justify-between gap-3 transition-colors",
-                selected
+                "w-full text-left p-4 rounded-2xl border-2 flex items-center gap-4 transition-colors",
+                isSelected
                   ? "border-primary bg-primary/10"
                   : "border-border hover:border-foreground/30",
               )}
             >
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <span
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                  isSelected ? "bg-primary/20" : "bg-muted",
+                )}
+              >
+                <Icon
                   className={cn(
-                    "w-5 h-5 rounded-full flex-shrink-0 border-2 mt-0.5",
-                    selected
-                      ? "border-[6px] border-primary"
-                      : "border-muted-foreground/40",
+                    "w-5 h-5",
+                    isSelected ? "text-primary" : "text-muted-foreground",
                   )}
                   aria-hidden="true"
                 />
-                <span className="flex flex-col gap-0.5 min-w-0">
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className={cn(
                       "text-base font-semibold",
-                      selected ? "text-foreground" : "text-foreground/80",
+                      isSelected ? "text-foreground" : "text-foreground/80",
                     )}
                   >
-                    {c.label}
+                    {opt.label}
                   </span>
-                  <span className="text-xs text-muted-foreground leading-snug">
-                    {c.hint}
-                  </span>
-                </span>
+                  {opt.recommended && (
+                    <span className="bg-background border border-border px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                      <Star
+                        className="w-3 h-3 text-yellow-500 fill-yellow-500"
+                        aria-hidden="true"
+                      />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Recommended
+                      </span>
+                    </span>
+                  )}
+                  {opt.requiresVerification && (
+                    <span className="bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                      <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">
+                        HIPAA Verified
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">{opt.tagline}</span>
               </div>
-              {c.recommended && (
-                <span className="bg-background border border-border px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 self-start">
-                  <Star
-                    className="w-3 h-3 text-yellow-500 fill-yellow-500"
-                    aria-hidden="true"
-                  />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Recommended
-                  </span>
-                </span>
-              )}
+              <span
+                className={cn(
+                  "w-5 h-5 rounded-full flex-shrink-0 border-2",
+                  isSelected
+                    ? "border-[6px] border-primary"
+                    : "border-muted-foreground/40",
+                )}
+                aria-hidden="true"
+              />
             </button>
           );
         })}
       </div>
 
-      {showName && (
-        <div>
-          <Label htmlFor="caregiverForName" className="text-sm font-medium">
-            Their first name
-          </Label>
-          <Input
-            id="caregiverForName"
-            value={caregiverFor}
-            onChange={(e) => setCaregiverFor(e.target.value)}
-            placeholder="First name or relationship (e.g. Mom, Dad, Aunt Lin)"
-            className="mt-2 h-12 text-base rounded-xl px-4"
-          />
+      {/* Expanded description for the selected role */}
+      {selected && (
+        <div
+          className={cn(
+            "rounded-xl border p-4 text-sm leading-relaxed transition-colors",
+            selected.requiresVerification
+              ? "border-amber-200 bg-amber-50/60 text-amber-900"
+              : "border-border bg-muted/40 text-muted-foreground",
+          )}
+        >
+          {selected.requiresVerification && (
+            <div className="flex items-center gap-2 mb-2 font-semibold text-amber-800">
+              <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>HIPAA verification required</span>
+            </div>
+          )}
+          <p>{selected.description}</p>
         </div>
       )}
 
@@ -364,27 +406,53 @@ function StepWho({
         disabled={isPending}
         className="w-full h-14 text-base rounded-2xl font-semibold"
       >
-        {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continue"}
+        {isPending ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : selectedRole === "trustee" ? (
+          "Continue to Verification"
+        ) : (
+          "Continue"
+        )}
       </Button>
       <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
         <Lock className="w-3.5 h-3.5" aria-hidden="true" />
-        We'll never contact them without your permission.
+        You can change your role or invite others after setup.
       </p>
     </div>
   );
 }
 
-function StepHow({
-  startMode,
+function StepVerify({
   onBack,
-  onPrimary,
-  onSkip,
+  onSubmit,
+  onChooseDifferent,
 }: {
-  startMode: StartMode;
   onBack: () => void;
-  onPrimary: () => void;
-  onSkip: () => void;
+  onSubmit: () => void;
+  onChooseDifferent: () => void;
 }) {
+  const [agreed, setAgreed] = useState(false);
+
+  const requirements = [
+    {
+      icon: FileText,
+      title: "Government-issued photo ID",
+      detail: "Driver's license, passport, or state ID — scanned or photographed.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Reason for access",
+      detail:
+        "A brief statement confirming your relationship to the account holder and your need to access health-adjacent financial records.",
+    },
+    {
+      icon: Users,
+      title: "Authorization from Primary User",
+      detail:
+        "The Primary User must confirm your appointment as Trustee before access is granted.",
+    },
+  ];
+
   return (
     <div className="px-6 pt-8 pb-6 flex flex-col gap-5">
       <div className="flex items-center justify-between">
@@ -399,39 +467,164 @@ function StepHow({
         <StepDots active={3} />
         <div className="w-6" />
       </div>
+
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+          <ShieldCheck className="w-5 h-5 text-amber-700" aria-hidden="true" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold leading-tight">
+            Trustee Verification
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Required under HIPAA (45 CFR §164.502) for access to health-adjacent
+            financial records.
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-1">
+        <p className="text-sm font-semibold text-amber-900">
+          Why is verification required?
+        </p>
+        <p className="text-sm text-amber-800 leading-relaxed">
+          Trustee access includes insurance documents, medical bills, and other
+          records that may contain Protected Health Information (PHI). Under US HIPAA
+          law, anyone accessing PHI on behalf of another person must provide
+          documented authorisation before access is granted.
+        </p>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold mb-3">You will need to provide:</p>
+        <div className="space-y-3">
+          {requirements.map((r) => {
+            const Icon = r.icon;
+            return (
+              <div key={r.title} className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                  <Icon className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{r.title}</p>
+                  <p className="text-xs text-muted-foreground leading-snug mt-0.5">
+                    {r.detail}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-muted/30 p-3 flex gap-2.5 items-start">
+        <Shield className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-xs text-muted-foreground leading-snug">
+          Your identity documents are processed by a HIPAA-certified identity verification
+          partner and are never stored by Kindue. Verification typically takes 1–2
+          business days.
+        </p>
+      </div>
+
+      <label className="flex items-start gap-3 cursor-pointer group">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={agreed}
+          onClick={() => setAgreed((v) => !v)}
+          className={cn(
+            "w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors",
+            agreed
+              ? "bg-primary border-primary"
+              : "border-muted-foreground/40 group-hover:border-primary/60",
+          )}
+        >
+          {agreed && <CheckCircle2 className="w-3.5 h-3.5 text-primary-foreground" aria-hidden="true" />}
+        </button>
+        <span className="text-sm text-muted-foreground leading-snug">
+          I understand that my Trustee access will remain <strong className="text-foreground">pending</strong> until
+          HIPAA verification is complete and the Primary User has approved my appointment.
+        </span>
+      </label>
+
+      <Button
+        onClick={onSubmit}
+        disabled={!agreed}
+        className="w-full h-14 text-base rounded-2xl font-semibold"
+      >
+        Submit Verification Request
+      </Button>
+
+      <button
+        type="button"
+        onClick={onChooseDifferent}
+        className="text-sm font-medium text-muted-foreground hover:text-foreground text-center"
+      >
+        Choose a different role instead
+      </button>
+    </div>
+  );
+}
+
+function StepHow({
+  startMode,
+  selectedRole,
+  onBack,
+  onPrimary,
+  onSkip,
+}: {
+  startMode: StartMode;
+  selectedRole: HouseholdRole;
+  onBack: () => void;
+  onPrimary: () => void;
+  onSkip: () => void;
+}) {
+  const roleLabel =
+    selectedRole === "caregiver"
+      ? "caregivers"
+      : selectedRole === "other"
+        ? "viewers"
+        : "caregivers";
+
+  return (
+    <div className="px-6 pt-8 pb-6 flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="p-2 -ml-2 rounded-full hover:bg-muted"
+          aria-label="Back"
+        >
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <StepDots active={3} />
+        <div className="w-6" />
+      </div>
+
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
           Pick how you want to start
         </h1>
         <p className="text-base text-muted-foreground mt-2">
-          You can change this anytime. Most caregivers start with view-only.
+          You can change this anytime. Most {roleLabel} start with view-only.
         </p>
       </div>
 
       <div className="space-y-3">
         <ModeCard
           selected={startMode === "view_only"}
-          onClick={() => {
-            /* only view_only is selectable today */
-          }}
+          onClick={() => { /* only view_only is selectable today */ }}
           emoji="👀"
           title="View only — safest"
           description="We'll watch their email for bills and tell you what we find. We won't connect any bank accounts."
           subtitle="Takes 2 minutes · Connects Gmail (read-only)"
           recommended
         />
-        {/* "Full protection" stays visible so caregivers can see it's on
-            the roadmap, but it's not selectable yet — Plaid (or any
-            bank-linking provider) hasn't been integrated. Letting users
-            pick it and then silently routing them to the same Gmail
-            scan as view-only was misleading. */}
         <ModeCard
           selected={false}
           disabled
           comingSoon
-          onClick={() => {
-            /* disabled */
-          }}
+          onClick={() => { /* disabled */ }}
           emoji="🛡️"
           title="Full protection"
           description="Connect their accounts so we can spot duplicate charges and unusual activity."
@@ -445,21 +638,22 @@ function StepHow({
           aria-hidden="true"
         />
         <p className="text-xs text-muted-foreground leading-snug">
-          We never move your money. You always approve any action.
+          We never move money. You always approve any action.
         </p>
       </div>
 
-      <div className="rounded-2xl border-2 border-primary/30 bg-primary/[0.04] p-4 flex items-start gap-3">
-        <Shield className="w-5 h-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
-        <div className="space-y-1">
-          <p className="text-sm font-semibold">Next: invite a Trustee</p>
-          <p className="text-xs text-muted-foreground leading-snug">
-            Most caregivers add a second Trustee (a sibling or spouse) so
-            someone always has full access if you're unavailable. You can
-            also add Family members and Caregivers anytime.
-          </p>
+      {selectedRole === "primary_user" && (
+        <div className="rounded-2xl border-2 border-primary/30 bg-primary/[0.04] p-4 flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">Next: invite a Trustee</p>
+            <p className="text-xs text-muted-foreground leading-snug">
+              Most primary users add a Trustee (a sibling or spouse) so someone always
+              has backup access. You can also add Caregivers and viewers anytime.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col items-center gap-3">
         <Button
@@ -559,9 +753,7 @@ function ModeCard({
       >
         {description}
       </p>
-      <p className="text-xs font-medium text-muted-foreground pl-8">
-        {subtitle}
-      </p>
+      <p className="text-xs font-medium text-muted-foreground pl-8">{subtitle}</p>
     </button>
   );
 }
