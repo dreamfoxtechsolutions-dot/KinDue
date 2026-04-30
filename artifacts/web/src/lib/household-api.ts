@@ -616,13 +616,49 @@ export const householdApi = {
   // the UI can keep its module-level imports without crashing on load.
   // ---------------------------------------------------------------------
 
-  // TODO: backend not implemented — no `/onboarding` endpoint.
-  setOnboarding: async (_body: {
+  // Creates the user's first household via POST /households, then
+  // makes it the active household. The `choice` and `caregiverFor`
+  // fields are not stored server-side (no dedicated onboarding
+  // endpoint) — they stay in Clerk unsafeMetadata via the wizard's
+  // own `markWizardSeen` call.
+  setOnboarding: async (body: {
     choice: "just_me" | "with_someone" | "for_someone" | "multiple";
     caregiverFor?: string;
     householdName?: string;
   }): Promise<{ household: HouseholdMe["household"] }> => {
-    throw new Error("Onboarding flow is not available yet.");
+    // If the user already has a household, just activate it — don't
+    // create a duplicate when the wizard reruns for existing accounts.
+    const existing = await fetchHouseholds().catch(() => [] as HouseholdSummaryResponse[]);
+    let hh: HouseholdDetailResponse;
+    if (existing.length > 0) {
+      const first = existing[0]!;
+      hh = { id: first.id, name: first.name, createdAt: first.createdAt };
+    } else {
+      // Build a human-readable household name from what the wizard gives us.
+      let name = body.householdName?.trim() || "My Household";
+      if (body.caregiverFor?.trim()) {
+        name = `${body.caregiverFor.trim()}'s Household`;
+      }
+      hh = await customFetch<HouseholdDetailResponse>("/api/households", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+    }
+    writeActiveHouseholdId(hh.id);
+    return {
+      household: {
+        id: hh.id,
+        name: hh.name,
+        onboardingChoice: body.choice,
+        caregiverFor: body.caregiverFor ?? "",
+        caregiverPhone: "",
+        caregiverHomeLat: null,
+        caregiverHomeLng: null,
+        caregiverHomeLabel: "",
+        rolesRefinedAt: null,
+        createdAt: hh.createdAt,
+      },
+    };
   },
 
   // TODO: backend not implemented — no `/roles-refined` endpoint.
